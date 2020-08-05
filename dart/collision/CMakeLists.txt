@@ -39,5 +39,5 @@ endif()
 # Add subdirectories
 add_subdirectory(dart)
 add_subdirectory(fcl)
-add_subdirectory(ode)
+#add_subdirectory(ode)
 add_subdirectory(bullet)
