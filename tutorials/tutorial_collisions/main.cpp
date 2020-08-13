@@ -366,15 +366,15 @@ BodyNode* addRigidBody(
 {
   // Set the Joint properties
   // Lesson 1a
-  typename JointType::Properties properties;
-  properties.mName = name+"_joint";
+  typename JointType::Properties joint_properties;
+  joint_properties.mName = name+"_joint";
 
   if (parent)
   {
     Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
     tf.translation() = Eigen::Vector3d(0, 0, default_shape_height / 2.0);
-    properties.mT_ParentBodyToJoint = tf;
-    properties.mT_ChildBodyToJoint = tf.inverse();
+    joint_properties.mT_ParentBodyToJoint = tf;
+    joint_properties.mT_ChildBodyToJoint = tf.inverse();
   }
 
   // Create the Joint and Body pair
@@ -453,15 +453,15 @@ BodyNode* addSoftBody(
 {
   // Set the Joint properties
   // Lesson 2a
-  typename JointType::Properties properties;
-  properties.mName = name+"_joint";
+  typename JointType::Properties joint_properties;
+  joint_properties.mName = name+"_joint";
 
   if (parent)
   {
     Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
     tf.translation() = Eigen::Vector3d(0, 0, default_shape_height / 2.0);
-    properties.mT_ParentBodyToJoint = tf;
-    properties.mT_ChildBodyToJoint = tf.inverse();
+    joint_properties.mT_ParentBodyToJoint = tf;
+    joint_properties.mT_ChildBodyToJoint = tf.inverse();
   }
 
   // Set the properties of the soft body
