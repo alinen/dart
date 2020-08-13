@@ -380,7 +380,7 @@ BodyNode* addRigidBody(
   // Create the Joint and Body pair
   // Lesson 1b
   BodyNode* bn = chain->createJointAndBodyNodePair<JointType>(
-    parent, properties, BodyNode::AspectProperties(name)).second;
+    parent, joint_properties, BodyNode::AspectProperties(name)).second;
 
   // Make the shape based on the requested Shape type
   // Lesson 1c
@@ -517,7 +517,7 @@ BodyNode* addSoftBody(
       soft_properties);
 
   SoftBodyNode* bn = chain->createJointAndBodyNodePair<JointType, SoftBodyNode>(
-      parent, properties, body_properties).second;
+      parent, joint_properties, body_properties).second;
 
   // Zero out the inertia for the underlying BodyNode
   // Lesson 2d
