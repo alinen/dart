@@ -1,0 +1,67 @@
+<?xml version="1.0" ?>
+<skel version="1.0">
+    <world name="world 1">
+        <physics>
+            <time_step>0.001</time_step>
+            <gravity>0 -9.81 0</gravity>
+            <collision_detector>fcl_mesh</collision_detector>
+        </physics>
+        <skeleton name="skeleton">
+            <body name="link 1">
+                <gravity>1</gravity>
+                <transformation>0 0 0 0 0 0</transformation>
+                <inertia>
+                    <mass>1.0</mass>
+                    <offset>0 0 0</offset>
+                </inertia>
+                <visualization_shape>
+                    <geometry>
+                        <box>
+                            <size>0.5 1 0.5</size>
+                        </box>
+                    </geometry>
+                </visualization_shape>
+                <collision_shape>
+                    <geometry>
+                        <box>
+                            <size>0.5 1 0.5</size>
+                        </box>
+                    </geometry>
+                </collision_shape>
+            </body>
+            <body name="link 2">
+                <gravity>1</gravity>
+                <transformation>0 1 0 0 0 0</transformation>
+                <inertia>
+                    <mass>1.0</mass>
+                    <offset>0 0 0</offset>
+                </inertia>
+                <collision_shape>
+                    <geometry>
+                        <box>
+                            <size>0.5 1 0.5</size>
+                        </box>
+                    </geometry>
+                </collision_shape>
+                <visualization_shape>
+                    <geometry>
+                        <box>
+                            <size>0.5 1 0.5</size>
+                        </box>
+                    </geometry>
+                </visualization_shape>
+            </body>
+            <joint type="free" name="joint 1">
+                <parent>world</parent>
+                <child>link 1</child>
+                <transformation>0 0 0 0 0 0</transformation>
+            </joint>
+            <joint type="ball" name="joint 2">
+                <parent>link 1</parent>
+                <child>link 2</child>
+                <transformation>2 0 0 0 0 0</transformation>
+            </joint>
+        </skeleton>	
+    </world>
+</skel>
+
