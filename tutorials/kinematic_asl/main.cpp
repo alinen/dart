@@ -273,7 +273,7 @@ protected:
   bool mPositiveSign;
 };
 
-void setGeometry(const BodyNodePtr& bn, AJoint* joint)
+void createBox(const BodyNodePtr& bn, AJoint* joint)
 {
   // Create a BoxShape to be used for both visualization and collision checking
   // Dimension shoudl be driven by joint size
@@ -292,7 +292,6 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint)
 
   // Set the location of the shape node
   // Position should be centered on the limb
-  // TODO: Cleanup repeated code from root
   Eigen::Vector3d offsetDir = Eigen::Vector3d(offset[0], offset[1], offset[2]).normalized(); 
   Eigen::Vector3d x,y,z;
   x = Eigen::Vector3d::UnitY().cross(offsetDir).normalized(); 
@@ -319,28 +318,13 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint)
   Eigen::Isometry3d box_tf(Eigen::Isometry3d::Identity());
   box_tf.fromPositionOrientationScale(center, R, Eigen::Vector3d::Ones());
   shapeNode->setRelativeTransform(box_tf);
-
-  bn->setLocalCOM(center); // TODO: Fix me
 }
 
-BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
+void setGeometry(const BodyNodePtr& bn, AJoint* joint, double radius)
 {
-  std::string name = joint->getName();
-
-  FreeJoint::Properties properties;
-  properties.mName = name + "_joint";
-  properties.mInitialPositions = Eigen::Vector6d::Zero();
-  //properties.mRestPositions = Eigen::Vector3d::Constant(default_rest_position);
-  //properties.mSpringStiffnesses = Eigen::Vector3d::Constant(default_stiffness);
-  //properties.mDampingCoefficients = Eigen::Vector3d::Constant(default_damping);
-
-  BodyNodePtr bn = pendulum->createJointAndBodyNodePair<FreeJoint>(
-        nullptr, properties, BodyNode::AspectProperties(name)).second;
-
   // Make a shape for the Joint
-  const double& R = default_pelvis_radius;
   std::shared_ptr<EllipsoidShape> ball(
-        new EllipsoidShape(sqrt(2) * Eigen::Vector3d(R, R, R)));
+        new EllipsoidShape(sqrt(2) * Eigen::Vector3d(radius, radius, radius)));
   auto shapeNode = bn->createShapeNodeWith<VisualAspect>(ball);
   shapeNode->getVisualAspect()->setColor(dart::Color::Blue());
 
@@ -350,16 +334,33 @@ BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
   {
     AJoint* child = joint->getChildAt(i);
     coms += 0.5f * child->getLocalTranslation();
-    setGeometry(bn, child);
+    createBox(bn, child);
   }
   coms = coms / (float) joint->getNumChildren();
   
-  // Move the center of mass to the center of the children
+  // Move the center of mass to the average com of the children
+  // coms are at the center of each box joint
   bn->setLocalCOM(Eigen::Vector3d(coms[0], coms[1], coms[2]));
-
-  return bn;
 }
 
+BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
+{
+  std::string name = joint->getName();
+
+  FreeJoint::Properties properties;
+  properties.mName = name + "_joint";
+  properties.mInitialPositions = Eigen::Vector6d::Zero();
+  //TODO: properties.mKinematic = true;
+  //properties.mRestPositions = Eigen::Vector3d::Constant(default_rest_position);
+  //properties.mSpringStiffnesses = Eigen::Vector3d::Constant(default_stiffness);
+  //properties.mDampingCoefficients = Eigen::Vector3d::Constant(default_damping);
+
+  BodyNodePtr bn = pendulum->createJointAndBodyNodePair<FreeJoint>(
+        nullptr, properties, BodyNode::AspectProperties(name)).second;
+
+  setGeometry(bn, joint, default_pelvis_radius);
+  return bn;
+}
 
 BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
 {
@@ -379,22 +380,21 @@ BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
         parent, properties, BodyNode::AspectProperties(joint->getName())).second;
 
   // Make a shape for the Joint
-  const double R = default_radius;
-  std::shared_ptr<SphereShape> sph(new SphereShape(R));
-
-  Eigen::Isometry3d tf(Eigen::Isometry3d::Identity());
-  auto shapeNode = bn->createShapeNodeWith<VisualAspect>(sph);
-  shapeNode->getVisualAspect()->setColor(dart::Color::Blue());
-  shapeNode->setRelativeTransform(tf);
-
-  // Set the geometry of the Body
-  for (int i = 0; i < joint->getNumChildren(); i++)
-  {
-    AJoint* child = joint->getChildAt(i);
-    setGeometry(bn, child);
-  }
-
+  setGeometry(bn, joint, default_radius);
   return bn;
+}
+
+bool isHandJoint(AJoint* joint)
+{
+  while (joint)
+  {
+    if (joint->getName().find("Palm") != std::string::npos)
+    {
+      return true;
+    }
+    joint = joint->getParent();
+  }
+  return false;
 }
 
 // Load a biped model and enable joint limits and self-collision
@@ -407,11 +407,20 @@ SkeletonPtr loadBiped()
   reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
     skeleton, motion);
 
+  motion.update(skeleton, 0); // set pose at time 0
+
+  // sitting position
+  skeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+  skeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+
+ //ARenderer::DrawCube(ATransform(glm::quat(0.00,0.00,0.00,1.00),glm::vec3(0.00,0.00,0.00),glm::vec3(40.00,197.00,40.00)));
+
   SkeletonPtr biped = Skeleton::create("Biped");
   std::map<AJoint*, BodyNode*> bodies;
-  for (int i = 0; i < 7/*skeleton.getNumJoints()*/; i++) // left leg
+  for (int i = 0; i < skeleton.getNumJoints(); i++) // left leg
   {
     AJoint* joint = skeleton.getByID(i);
+    if (isHandJoint(joint)) continue;
     AJoint* parent = joint->getParent();
     BodyNode* bn = parent? 
       addBody(biped, bodies[parent], joint) : 
