@@ -3,6 +3,7 @@
 #include <dart/gui/gui.hpp>
 #include <dart/utils/utils.hpp>
 #include <map>
+#include <cassert>
 #include "AnimationToolkit.h"
 
 const double default_speed_increment = 0.5;
@@ -32,6 +33,10 @@ using namespace dart::gui;
 using namespace dart::gui::glut;
 using namespace dart::utils;
 using namespace dart::math;
+
+// Globals for now...
+AMotion bvhMotion;
+ASkeleton bvhSkeleton;
 
 class Controller
 {
@@ -222,6 +227,26 @@ public:
 
   void timeStepping() override
   {
+    bvhMotion.update(bvhSkeleton, mWorld->getTime());
+    float angle = 3.14 * sin(mWorld->getTime());
+
+    SkeletonPtr skeleton = mWorld->getSkeleton("biped");
+    for (size_t i = 1; i < skeleton->getNumJoints(); i++)
+    {
+      Joint* joint = skeleton->getJoint(i);
+
+      AJoint* bvhJoint = bvhSkeleton.getByName(joint->getName());
+      assert(bvhJoint != 0);
+
+      glm::quat rotation = bvhJoint->getLocalRotation();
+      glm::vec3 euler = glm::extractEulerAngleRO(glm::XYZ, glm::mat3(rotation));
+
+      // Set joint "position" as XYZ euler angles (local coordinates?)
+      joint->setPosition(0, euler[0]);
+      joint->setPosition(1, euler[1]);
+      joint->setPosition(2, euler[2]);
+
+    }
     //mController->clearForces();
 
     // Lesson 3
@@ -348,9 +373,9 @@ BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
   std::string name = joint->getName();
 
   FreeJoint::Properties properties;
-  properties.mName = name + "_joint";
+  properties.mName = name;
   properties.mInitialPositions = Eigen::Vector6d::Zero();
-  //TODO: properties.mKinematic = true;
+  properties.mActuatorType = Joint::LOCKED;
   //properties.mRestPositions = Eigen::Vector3d::Constant(default_rest_position);
   //properties.mSpringStiffnesses = Eigen::Vector3d::Constant(default_stiffness);
   //properties.mDampingCoefficients = Eigen::Vector3d::Constant(default_damping);
@@ -368,10 +393,11 @@ BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
 
   // Set up the properties for the Joint
   EulerJoint::Properties properties;
-  properties.mName = joint->getName() + "_joint";
+  properties.mName = joint->getName();
   properties.mAxisOrder = EulerJoint::AxisOrder::XYZ;
   properties.mT_ParentBodyToJoint.translation() =
       Eigen::Vector3d(offset[0], offset[1], offset[2]); // Joint offset
+  properties.mActuatorType = Joint::VELOCITY;
   //properties.mRestPositions[0] = default_rest_position;
   //properties.mSpringStiffnesses[0] = default_stiffness;
   //properties.mDampingCoefficients[0] = default_damping;
@@ -400,26 +426,21 @@ bool isHandJoint(AJoint* joint)
 // Load a biped model and enable joint limits and self-collision
 SkeletonPtr loadBiped()
 {
-  ASkeleton skeleton;
-  AMotion motion;
-
   ABVHReader reader;
   reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
-    skeleton, motion);
+    bvhSkeleton, bvhMotion);
 
-  motion.update(skeleton, 0); // set pose at time 0
+  bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
 
   // sitting position
-  skeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
-  skeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+  bvhSkeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+  bvhSkeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
 
- //ARenderer::DrawCube(ATransform(glm::quat(0.00,0.00,0.00,1.00),glm::vec3(0.00,0.00,0.00),glm::vec3(40.00,197.00,40.00)));
-
-  SkeletonPtr biped = Skeleton::create("Biped");
+  SkeletonPtr biped = Skeleton::create("biped");
   std::map<AJoint*, BodyNode*> bodies;
-  for (int i = 0; i < skeleton.getNumJoints(); i++) // left leg
+  for (int i = 0; i < bvhSkeleton.getNumJoints(); i++) // left leg
   {
-    AJoint* joint = skeleton.getByID(i);
+    AJoint* joint = bvhSkeleton.getByID(i);
     if (isHandJoint(joint)) continue;
     AJoint* parent = joint->getParent();
     BodyNode* bn = parent? 
@@ -554,9 +575,12 @@ SkeletonPtr createFloor()
 
 int main(int argc, char* argv[])
 {
-
   SkeletonPtr floor = createFloor();
   SkeletonPtr biped = loadBiped();
+
+ // TODO: Add chair
+ //ARenderer::DrawCube(ATransform(glm::quat(0.00,0.00,0.00,1.00),glm::vec3(0.00,0.00,0.00),glm::vec3(40.00,197.00,40.00)));
+
 
   // Lesson 2
   //setInitialPose(biped);
