@@ -84,8 +84,8 @@ public:
   void setTargetPositions()
   {
     mTargetPositions = mBiped->getPositions();
-    std::cout << "NUM POSITIONS: " << mTargetPositions.size() << std::endl;
-    std::cout << "NUM JOINTS: " << mBiped->getNumJoints() << std::endl;
+    //std::cout << "NUM POSITIONS: " << mTargetPositions.size() << std::endl;
+    //std::cout << "NUM JOINTS: " << mBiped->getNumJoints() << std::endl;
 
     for (size_t i = 1; i < mBiped->getNumJoints(); i++)
     {
@@ -239,13 +239,13 @@ public:
 
   void timeStepping() override
   {
-    //bvhMotion.update(bvhSkeleton, mWorld->getTime());
-    //mController->clearForces();
-    //mController->setTargetPositions();
+    bvhMotion.update(bvhSkeleton, 0); //mWorld->getTime()); // todo: update time
+    mController->clearForces();
+    mController->setTargetPositions();
 
     // Lesson 3
     //mController->addPDForces();
-    //mController->addSPDForces();
+    mController->addSPDForces();
 
     // Lesson 4
     //mController->addAnkleStrategyForces();
@@ -369,10 +369,7 @@ BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
   FreeJoint::Properties properties;
   properties.mName = name;
   properties.mInitialPositions = Eigen::Vector6d::Zero();
-  //properties.mActuatorType = Joint::LOCKED;
-  //properties.mRestPositions = Eigen::Vector3d::Constant(default_rest_position);
-  //properties.mSpringStiffnesses = Eigen::Vector3d::Constant(default_stiffness);
-  //properties.mDampingCoefficients = Eigen::Vector3d::Constant(default_damping);
+  properties.mActuatorType = Joint::LOCKED;
 
   BodyNodePtr bn = pendulum->createJointAndBodyNodePair<FreeJoint>(
         nullptr, properties, BodyNode::AspectProperties(name)).second;
@@ -392,15 +389,19 @@ BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
   properties.mT_ParentBodyToJoint.translation() =
       Eigen::Vector3d(offset[0], offset[1], offset[2]); // Joint offset
 
-  //if (isUpperBody(joint))
+  if (isUpperBody(joint))
   {
     properties.mActuatorType = Joint::FORCE;
     properties.mSpringStiffnesses[0] = default_stiffness;
+    properties.mSpringStiffnesses[1] = default_stiffness;
+    properties.mSpringStiffnesses[2] = default_stiffness;
     properties.mDampingCoefficients[0] = default_damping;
+    properties.mDampingCoefficients[1] = default_damping;
+    properties.mDampingCoefficients[2] = default_damping;
   }
-  //else
+  else
   {
-    //properties.mActuatorType = Joint::VELOCITY;
+    properties.mActuatorType = Joint::VELOCITY;
   }
 
   BodyNodePtr bn = pendulum->createJointAndBodyNodePair<EulerJoint>(
@@ -431,18 +432,13 @@ SkeletonPtr loadBiped()
   reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
     bvhSkeleton, bvhMotion);
 
-  bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
-
-  // sitting position
-  bvhSkeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
-  bvhSkeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
-
   SkeletonPtr biped = Skeleton::create("biped");
   std::map<AJoint*, BodyNode*> bodies;
   for (int i = 0; i < bvhSkeleton.getNumJoints(); i++) // left leg
   {
     AJoint* joint = bvhSkeleton.getByID(i);
     if (isHandJoint(joint)) continue;
+    if (joint->getNumChildren() == 0) continue;
     AJoint* parent = joint->getParent();
     BodyNode* bn = parent? 
       addBody(biped, bodies[parent], joint) : 
@@ -452,6 +448,27 @@ SkeletonPtr loadBiped()
 
   biped->disableSelfCollisionCheck();
   biped->disableAdjacentBodyCheck();
+
+  // set initial pose
+  bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
+  bvhSkeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+  bvhSkeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+
+  for (size_t i = 1; i < biped->getNumJoints(); i++)
+  {
+    Joint* joint = biped->getJoint(i);
+
+    AJoint* bvhJoint = bvhSkeleton.getByName(joint->getName());
+    assert(bvhJoint != 0);
+
+    glm::quat rotation = bvhJoint->getLocalRotation();
+    glm::vec3 euler = glm::extractEulerAngleRO(glm::XYZ, glm::mat3(rotation));
+
+    // Set joint "position" as XYZ euler angles (local coordinates?)
+    joint->setPosition(0, euler[0]);
+    joint->setPosition(1, euler[1]);
+    joint->setPosition(2, euler[2]);
+  }
 
   return biped;
 }
