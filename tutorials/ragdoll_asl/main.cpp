@@ -38,266 +38,6 @@ using namespace dart::math;
 AMotion bvhMotion;
 ASkeleton bvhSkeleton;
 
-class Controller
-{
-public:
-  /// Constructor
-  Controller(const SkeletonPtr& biped)
-    : mBiped(biped), mPreOffset(0.0), mSpeed(0.0)
-  {
-    int nDofs = mBiped->getNumDofs();
-
-    mForces = Eigen::VectorXd::Zero(nDofs);
-
-    mKp = Eigen::MatrixXd::Identity(nDofs, nDofs);
-    mKd = Eigen::MatrixXd::Identity(nDofs, nDofs);
-
-    for (std::size_t i = 0; i < 6; ++i)
-    {
-      mKp(i, i) = 0.0;
-      mKd(i, i) = 0.0;
-    }
-
-    for (std::size_t i = 6; i < biped->getNumDofs(); ++i)
-    {
-      mKp(i, i) = 1000;
-      mKd(i, i) = 50;
-    }
-
-    setTargetPositions(mBiped->getPositions());
-  }
-
-  /// Reset the desired dof position to the current position
-  void setTargetPositions(const Eigen::VectorXd& pose)
-  {
-    mTargetPositions = pose;
-  }
-
-  /// Clear commanding forces
-  void clearForces()
-  {
-    mForces.setZero();
-  }
-
-  /// Add commanding forces from PD controllers
-  void addPDForces()
-  {
-    // Lesson 2
-    Eigen::VectorXd q = mBiped->getPositions();
-    Eigen::VectorXd dq = mBiped->getVelocities();
-
-    Eigen::VectorXd p = -mKp * (q - mTargetPositions);
-    Eigen::VectorXd d = -mKd * dq;
-
-    mForces += p + d;
-    mBiped->setForces(mForces);
-  }
-
-  /// Add commanind forces from Stable-PD controllers
-  void addSPDForces()
-  {
-    // Lesson 3
-    Eigen::VectorXd q = mBiped->getPositions();
-    Eigen::VectorXd dq = mBiped->getVelocities();
-
-    Eigen::MatrixXd invM = (mBiped->getMassMatrix() + mKd * mBiped->getTimeStep()).inverse();
-    Eigen::VectorXd p = -mKp * (q + dq * mBiped->getTimeStep() - mTargetPositions);
-    Eigen::VectorXd d = -mKd * dq;
-    Eigen::VectorXd qddot = invM * (-mBiped->getCoriolisAndGravityForces() + p + d + mBiped->getConstraintForces());
-
-    mForces += p + d - mKd * qddot * mBiped->getTimeStep();
-    mBiped->setForces(mForces);
-  }
-
-  /// add commanding forces from ankle strategy
-  void addAnkleStrategyForces()
-  {
-    // Lesson 4
-    Eigen::Vector3d COM = mBiped->getCOM();
-    Eigen::Vector3d offset(0.05, 0, 0);
-    Eigen::Vector3d COP = mBiped->getBodyNode("h_heel_left")->getTransform() * offset;
-    double diff = COM[0] - COP[0];
-
-    Eigen::Vector3d dCOM = mBiped->getCOMLinearVelocity();
-    Eigen::Vector3d dCOP =  mBiped->getBodyNode("h_heel_left")->getLinearVelocity(offset);
-    double dDiff = dCOM[0] - dCOP[0];
-
-    int lHeelIndex = mBiped->getDof("j_heel_left_1")->getIndexInSkeleton();
-    int rHeelIndex = mBiped->getDof("j_heel_right_1")->getIndexInSkeleton();
-    int lToeIndex = mBiped->getDof("j_toe_left")->getIndexInSkeleton();
-    int rToeIndex = mBiped->getDof("j_toe_right")->getIndexInSkeleton();
-    if (diff < 0.1 && diff >= 0.0)
-    {
-      // Feedback rule for recovering forward push
-      double k1 = 200.0;
-      double k2 = 100.0;
-      double kd = 10;
-      mForces[lHeelIndex] += -k1 * diff - kd * dDiff;
-      mForces[lToeIndex] += -k2 * diff - kd * dDiff;
-      mForces[rHeelIndex] += -k1 * diff - kd * dDiff;
-      mForces[rToeIndex] += -k2 * diff - kd * dDiff;
-    }
-    else if (diff > -0.2 && diff < -0.05)
-    {
-      // Feedback rule for recovering backward push
-      double k1 = 2000.0;
-      double k2 = 100.0;
-      double kd = 100;
-      mForces[lHeelIndex] += -k1 * diff - kd * dDiff;
-      mForces[lToeIndex] += -k2 * diff - kd * dDiff;
-      mForces[rHeelIndex] += -k1 * diff - kd * dDiff;
-      mForces[rToeIndex] += -k2 * diff - kd * dDiff;
-    }
-    mBiped->setForces(mForces);
-  }
-
-  // Send velocity commands on wheel actuators
-  void setWheelCommands()
-  {
-    // Lesson 6
-
-    int index1 = mBiped->getDof("joint_front_left_2")->getIndexInSkeleton();
-    mBiped->setCommand(index1, mSpeed);
-
-    int wheelFirstIndex = mBiped->getDof("joint_front_left_1")->getIndexInSkeleton();
-    for (size_t i = wheelFirstIndex; i < mBiped->getNumDofs(); ++i)
-    {
-        mKp(i, i) = 0.0;
-        mKd(i, i) = 0.0;
-    }
-  }
-
-  void changeWheelSpeed(double increment)
-  {
-    mSpeed += increment;
-    std::cout << "wheel speed = " << mSpeed << std::endl;
-  }
-
-protected:
-  /// The biped Skeleton that we will be controlling
-  SkeletonPtr mBiped;
-
-  /// Joint forces for the biped (output of the Controller)
-  Eigen::VectorXd mForces;
-
-  /// Control gains for the proportional error terms in the PD controller
-  Eigen::MatrixXd mKp;
-
-  /// Control gains for the derivative error terms in the PD controller
-  Eigen::MatrixXd mKd;
-
-  /// Target positions for the PD controllers
-  Eigen::VectorXd mTargetPositions;
-
-  /// For ankle strategy: Error in the previous timestep
-  double mPreOffset;
-
-  /// For velocity actuator: Current speed of the skateboard
-  double mSpeed;
-};
-
-class MyWindow : public SimWindow
-{
-public:
-  /// Constructor
-  MyWindow(const WorldPtr& world) : mForceCountDown(0), mPositiveSign(true)
-  {
-    setWorld(world);
-
-    //mController = std::make_unique<Controller>(mWorld->getSkeleton("biped"));
-  }
-
-  /// Handle keyboard input
-  void keyboard(unsigned char key, int x, int y) override
-  {
-    switch (key)
-    {
-      case ',':
-        mForceCountDown = default_countdown;
-        mPositiveSign = false;
-        break;
-      case '.':
-        mForceCountDown = default_countdown;
-        mPositiveSign = true;
-        break;
-      default:
-        SimWindow::keyboard(key, x, y);
-    }
-  }
-
-  void timeStepping() override
-  {
-    bvhMotion.update(bvhSkeleton, mWorld->getTime());
-    float angle = 3.14 * sin(mWorld->getTime());
-
-    SkeletonPtr skeleton = mWorld->getSkeleton("biped");
-    for (size_t i = 1; i < skeleton->getNumJoints(); i++)
-    {
-      Joint* joint = skeleton->getJoint(i);
-
-      AJoint* bvhJoint = bvhSkeleton.getByName(joint->getName());
-      assert(bvhJoint != 0);
-
-      glm::quat rotation = bvhJoint->getLocalRotation();
-      glm::vec3 euler = glm::extractEulerAngleRO(glm::XYZ, glm::mat3(rotation));
-
-      // Set joint "position" as XYZ euler angles (local coordinates?)
-      joint->setPosition(0, euler[0]);
-      joint->setPosition(1, euler[1]);
-      joint->setPosition(2, euler[2]);
-
-    }
-    //mController->clearForces();
-
-    // Lesson 3
-    //mController->addPDForces();
-    //mController->addSPDForces();
-
-    // Lesson 4
-    //mController->addAnkleStrategyForces();
-
-    // Lesson 6
-    //mController->setWheelCommands();
-
-    // Apply body forces based on user input, and color the body shape red
-    /*
-    if (mForceCountDown > 0)
-    {
-      BodyNode* bn = mWorld->getSkeleton("biped")->getBodyNode("h_abdomen");
-      auto shapeNodes = bn->getShapeNodesWith<VisualAspect>();
-      shapeNodes[0]->getVisualAspect()->setColor(dart::Color::Red());
-
-      if (mPositiveSign)
-        bn->addExtForce(
-            default_force * Eigen::Vector3d::UnitX(),
-            bn->getCOM(),
-            false,
-            false);
-      else
-        bn->addExtForce(
-            -default_force * Eigen::Vector3d::UnitX(),
-            bn->getCOM(),
-            false,
-            false);
-
-      --mForceCountDown;
-    }
-    */
-
-    // Step the simulation forward
-    SimWindow::timeStepping();
-  }
-
-protected:
-  //std::unique_ptr<Controller> mController;
-
-  /// Number of iterations before clearing a force entry
-  int mForceCountDown;
-
-  /// Whether a force should be applied in the positive or negative direction
-  bool mPositiveSign;
-};
-
 void createBox(const BodyNodePtr& bn, AJoint* joint)
 {
   // Create a BoxShape to be used for both visualization and collision checking
@@ -374,8 +114,8 @@ BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
 
   FreeJoint::Properties properties;
   properties.mName = name;
-  properties.mInitialPositions = Eigen::Vector6d::Zero();
-  properties.mActuatorType = Joint::LOCKED;
+  //properties.mInitialPositions = Eigen::Vector6d::Zero();
+  //properties.mActuatorType = Joint::LOCKED;
   //properties.mRestPositions = Eigen::Vector3d::Constant(default_rest_position);
   //properties.mSpringStiffnesses = Eigen::Vector3d::Constant(default_stiffness);
   //properties.mDampingCoefficients = Eigen::Vector3d::Constant(default_damping);
@@ -397,10 +137,10 @@ BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
   properties.mAxisOrder = EulerJoint::AxisOrder::XYZ;
   properties.mT_ParentBodyToJoint.translation() =
       Eigen::Vector3d(offset[0], offset[1], offset[2]); // Joint offset
-  properties.mActuatorType = Joint::VELOCITY;
+  //properties.mActuatorType = Joint::VELOCITY;
   //properties.mRestPositions[0] = default_rest_position;
-  //properties.mSpringStiffnesses[0] = default_stiffness;
-  //properties.mDampingCoefficients[0] = default_damping;
+  properties.mSpringStiffnesses[0] = default_stiffness;
+  properties.mDampingCoefficients[0] = default_damping;
 
   BodyNodePtr bn = pendulum->createJointAndBodyNodePair<EulerJoint>(
         parent, properties, BodyNode::AspectProperties(joint->getName())).second;
@@ -442,6 +182,7 @@ SkeletonPtr loadBiped()
   {
     AJoint* joint = bvhSkeleton.getByID(i);
     if (isHandJoint(joint)) continue;
+    if (joint->getNumChildren() == 0) continue;
     AJoint* parent = joint->getParent();
     BodyNode* bn = parent? 
       addBody(biped, bodies[parent], joint) : 
@@ -453,97 +194,6 @@ SkeletonPtr loadBiped()
   biped->disableAdjacentBodyCheck();
 
   return biped;
-}
-
-void setInitialPose(SkeletonPtr biped)
-{
-  // Lession 2
-  biped->setPosition(biped->getDof("j_thigh_left_z")->getIndexInSkeleton(), 0.15);
-  biped->setPosition(biped->getDof("j_thigh_right_z")->getIndexInSkeleton(), 0.15);
-  biped->setPosition(biped->getDof("j_shin_left")->getIndexInSkeleton(), -0.4);
-  biped->setPosition(biped->getDof("j_shin_right")->getIndexInSkeleton(), -0.4);
-  biped->setPosition(biped->getDof("j_heel_left_1")->getIndexInSkeleton(), 0.25);
-  biped->setPosition(biped->getDof("j_heel_right_1")->getIndexInSkeleton(), 0.25);
-}
-
-
-// Load a skateboard model and connect it to the biped model via an Euler joint
-void modifyBipedWithSkateboard(SkeletonPtr biped)
-{
-  // Lesson 5
-  WorldPtr world = SkelParser::readWorld(DART_DATA_PATH"skel/skateboard.skel");
-  SkeletonPtr skateboard = world->getSkeleton(0);
-
-  EulerJoint::Properties properties = EulerJoint::Properties();
-  properties.mT_ChildBodyToJoint.translation() = Eigen::Vector3d(0, 0.1, 0);
-
-  skateboard->getRootBodyNode()->moveTo<EulerJoint>(biped->getBodyNode("h_heel_left"), properties);
-}
-
-// Set the actuator type for four wheel joints to "VELOCITY"
-void setVelocityAccuators(SkeletonPtr biped)
-{
-  // Lesson 6
- Joint* wheel1 = biped->getJoint("joint_front_left");
-    wheel1->setActuatorType(Joint::VELOCITY);
-}
-
-// Solve for a balanced pose using IK
-Eigen::VectorXd solveIK(SkeletonPtr biped)
-{
-  biped->setPosition(biped->getDof("j_shin_right")->getIndexInSkeleton(), -1.4);
-  biped->setPosition(biped->getDof("j_bicep_left_x")->getIndexInSkeleton(), 0.8);
-  biped->setPosition(biped->getDof("j_bicep_right_x")->getIndexInSkeleton(), -0.8);
-
-  // Lesson 7
-  Eigen::VectorXd newPose = biped->getPositions();
-  BodyNodePtr leftHeel = biped->getBodyNode("h_heel_left");
-  BodyNodePtr leftToe = biped->getBodyNode("h_toe_left");
-  double initialHeight = -0.8;
-
-  for (std::size_t i = 0; i < default_ik_iterations; ++i)
-  {
-    Eigen::Vector3d deviation = biped->getCOM() - leftHeel->getCOM();
-    Eigen::Vector3d localCOM = leftHeel->getCOM(leftHeel);
-    LinearJacobian jacobian = biped->getCOMLinearJacobian()
-                              - biped->getLinearJacobian(leftHeel, localCOM);
-
-    // Sagittal deviation
-    double error = deviation[0];
-    Eigen::VectorXd gradient = jacobian.row(0);
-    Eigen::VectorXd newDirection = -0.2 * error * gradient;
-
-    // Lateral deviation
-    error = deviation[2];
-    gradient = jacobian.row(2);
-    newDirection += -0.2 * error * gradient;
-
-    // Position constraint on four (approximated) corners of the left foot
-    Eigen::Vector3d offset(0.0, -0.04, -0.03);
-    error = (leftHeel->getTransform() * offset)[1] - initialHeight;
-    gradient = biped->getLinearJacobian(leftHeel, offset).row(1);
-    newDirection += -0.2 * error * gradient;
-
-    offset[2] = 0.03;
-    error = (leftHeel->getTransform() * offset)[1] - initialHeight;
-    gradient = biped->getLinearJacobian(leftHeel, offset).row(1);
-    newDirection += -0.2 * error * gradient;
-
-    offset[0] = 0.04;
-    error = (leftToe->getTransform() * offset)[1] - initialHeight;
-    gradient = biped->getLinearJacobian(leftToe, offset).row(1);
-    newDirection += -0.2 * error * gradient;
-
-    offset[2] = -0.03;
-    error = (leftToe->getTransform() * offset)[1] - initialHeight;
-    gradient = biped->getLinearJacobian(leftToe, offset).row(1);
-    newDirection += -0.2 * error * gradient;
-
-    newPose += newDirection;
-    biped->setPositions(newPose);
-    biped->computeForwardKinematics(true, false, false);
-  }
-  return newPose;
 }
 
 SkeletonPtr createFloor()
@@ -578,23 +228,6 @@ int main(int argc, char* argv[])
   SkeletonPtr floor = createFloor();
   SkeletonPtr biped = loadBiped();
 
- // TODO: Add chair
- //ARenderer::DrawCube(ATransform(glm::quat(0.00,0.00,0.00,1.00),glm::vec3(0.00,0.00,0.00),glm::vec3(40.00,197.00,40.00)));
-
-
-  // Lesson 2
-  //setInitialPose(biped);
-
-  // Lesson 5
-  //modifyBipedWithSkateboard(biped);
-
-  // Lesson 6
-  //setVelocityAccuators(biped);
-
-  // Lesson 7
-  //Eigen::VectorXd balancedPose = solveIK(biped);
-  //biped->setPositions(balancedPose);
-
   WorldPtr world = std::make_shared<World>();
   world->setGravity(Eigen::Vector3d(0.0, -9.81, 0.0));
 
@@ -608,7 +241,8 @@ int main(int argc, char* argv[])
   world->addSkeleton(biped);
 
   // Create a window for rendering the world and handling user input
-  MyWindow window(world);
+  SimWindow window;
+  window.setWorld(world);
 
   // Print instructions
   std::cout << "'.': forward push" << std::endl;
