@@ -5,6 +5,7 @@
 #include <map>
 #include <cassert>
 #include "AnimationToolkit.h"
+#include "Anthropometrics.h"
 
 const double default_speed_increment = 0.5;
 
@@ -37,6 +38,7 @@ using namespace dart::math;
 // Globals for now...
 AMotion bvhMotion;
 ASkeleton bvhSkeleton;
+Anthropometrics anthropometrics;
 
 void createBox(const BodyNodePtr& bn, AJoint* joint)
 {
@@ -130,7 +132,7 @@ BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
 BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
 {
   glm::vec3 offset = joint->getLocalTranslation()/100.0f; // cm to m
-
+  
   // Set up the properties for the Joint
   EulerJoint::Properties properties;
   properties.mName = joint->getName();
@@ -170,11 +172,12 @@ SkeletonPtr loadBiped()
   reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
     bvhSkeleton, bvhMotion);
 
+  anthropometrics.init(bvhSkeleton, 0.01); // 0.01 converts from CM to M
   bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
 
   // sitting position
-  bvhSkeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
-  bvhSkeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+  //bvhSkeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
+  //bvhSkeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
 
   SkeletonPtr biped = Skeleton::create("biped");
   std::map<AJoint*, BodyNode*> bodies;

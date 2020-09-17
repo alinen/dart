@@ -18,7 +18,7 @@ set(AniTk /home/alinen/projects/AnimationToolkit/libsrc/animation)
 set(AniTkLib /home/alinen/projects/AnimationToolkit/lib/libanimation-soln.a)
 
 file(GLOB srcs "*.cpp" "*.hpp")
-add_executable(${example_name} ${srcs})
+add_executable(${example_name} main.cpp Anthropometrics.cpp)
 message(WARNING "ANIMATION "  ${AniTk})
 target_include_directories(${example_name} PUBLIC ${AniTk})
 target_link_libraries(${example_name} PUBLIC ${required_libraries} ${AniTkLib})
