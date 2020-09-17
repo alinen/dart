@@ -204,7 +204,7 @@ AJoint* findJoint(const ASkeleton& skeleton, const std::vector<std::string> name
    {
       std::string name = names[j];
       std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-      std::cout << name << std::endl;
+      //std::cout << name << std::endl;
 
       for (int i = 0; i < skeleton.getNumJoints(); i++)
       {
@@ -212,7 +212,7 @@ AJoint* findJoint(const ASkeleton& skeleton, const std::vector<std::string> name
          std::string jointName = current->getName();
          std::transform(jointName.begin(), jointName.end(), jointName.begin(), ::tolower);
          
-         std::cout << "JOINT: " << jointName << std::endl;
+         //std::cout << "JOINT: " << jointName << std::endl;
          if (jointName.find(name) != std::string::npos)
          {
             return current;
@@ -258,7 +258,6 @@ double Anthropometrics::estimateHeight(const ASkeleton& skeleton, int upidx) con
 
     AJoint* foot = findJoint(skeleton, {"Heel", "Toe", "Foot"});
     if (!foot) std::cout << "Cannot find left foot joint\n";
-    std::cout << "FOUND: " << foot->getName() << std::endl;
 
     double min = 99999999.0;
     double max = -99999999.0;
