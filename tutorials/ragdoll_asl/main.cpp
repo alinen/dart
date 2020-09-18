@@ -172,7 +172,7 @@ SkeletonPtr loadBiped()
   reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
     bvhSkeleton, bvhMotion);
 
-  anthropometrics.init(bvhSkeleton, 0.01); // 0.01 converts from CM to M
+  anthropometrics.init(bvhSkeleton, Anthropometrics::ASL_Mapping, 0.01); // 0.01 converts from CM to M
   bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
 
   // sitting position

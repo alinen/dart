@@ -8,6 +8,10 @@
 
 using namespace glm;
 
+Anthropometrics::BodyMap Anthropometrics::CMU_Mapping;
+Anthropometrics::BodyMap Anthropometrics::MB_Mapping;
+Anthropometrics::BodyMap Anthropometrics::ASL_Mapping;
+
 // initialize constants: alternate models can be tried by overriding these values
 Anthropometrics::Anthropometrics()
 {
@@ -165,14 +169,44 @@ Anthropometrics::Anthropometrics()
     CMU_Mapping["rfingers"]=BodyData(Hand, 0.05);
     CMU_Mapping["rfingersSite"]= BodyData(Hand, 0.05);
 
-    // TODO: ASL mapping
+    // TODO: ASL mapping fix this so it works with physics!
+    ASL_Mapping["Hips"] = BodyData(Trunk, 0.0);
+    ASL_Mapping["LeftUpLeg"] = BodyData(Trunk, 0.15);
+    ASL_Mapping["LeftLeg"] = BodyData(Thigh, 1.0);
+    ASL_Mapping["LeftFoot"] = BodyData(Shank, 1.0);
+    ASL_Mapping["LeftFootHeel"] = BodyData(Foot, 0.50);
+    ASL_Mapping["LeftHeelOutside"] = BodyData(Foot, 0.50);
+
+    ASL_Mapping["RightUpLeg"] = BodyData(Trunk, 0.15);
+    ASL_Mapping["RightLeg"] = BodyData(Thigh, 1.0);
+    ASL_Mapping["RightFoot"] = BodyData(Shank, 1.0);
+    ASL_Mapping["RightFootHeel"] = BodyData(Foot, 0.50);
+    ASL_Mapping["RightHeelOutside"] = BodyData(Foot, 0.50);
+
+    ASL_Mapping["Spine"] = BodyData(Trunk, 0.1);
+    ASL_Mapping["Spine1"] = BodyData(Trunk, 0.2);
+    ASL_Mapping["Neck"] = BodyData(HeadNeck, 0.1);
+    ASL_Mapping["Head"] = BodyData(HeadNeck, 0.1);
+    ASL_Mapping["HeadSite"] = BodyData(HeadNeck, 0.8);
+
+    ASL_Mapping["LeftShoulder"] = BodyData(Trunk, 0.05);
+    ASL_Mapping["LeftArm"] = BodyData(Trunk, 0.05);
+    ASL_Mapping["LeftForeArm"] = BodyData(UpperArm, 1.0);
+    ASL_Mapping["LeftHand"] = BodyData(Forearm, 1.0);
+    ASL_Mapping["LeftPalm"] = BodyData(Hand, 1.0);
+
+    ASL_Mapping["RightShoulder"] = BodyData(Trunk, 0.05);
+    ASL_Mapping["RightArm"] = BodyData(Trunk, 0.05);
+    ASL_Mapping["RightForeArm"] = BodyData(UpperArm, 1.0);
+    ASL_Mapping["RightHand"] = BodyData(Forearm, 1.0);
+    ASL_Mapping["RightPalm"] = BodyData(Hand, 1.0);
 }
 
 Anthropometrics::~Anthropometrics()
 {
 }
 
-void Anthropometrics::init(const ASkeleton& inSkeleton, double factor) 
+void Anthropometrics::init(const ASkeleton& inSkeleton, const BodyMap& map, double factor) 
 {
     ASkeleton skeleton = inSkeleton;
 
@@ -193,9 +227,205 @@ void Anthropometrics::init(const ASkeleton& inSkeleton, double factor)
 
     double height = estimateHeight(skeleton, upidx);
     double mass = getWeight(height);
-    //setupBoneShapes(skeleton, height, mass);
-    std::cout << "Height: " << height << " " << mass << std::endl; 
+    setupBoneShapes(skeleton, map, height, mass);
 }
+
+void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton, 
+   const BodyMap& mapping, double height, double totalMass)
+{
+    AJoint* root = skeleton.getRoot();
+
+    _height = height;
+    _totalMass = totalMass;
+    std::cout << "SetupBoneShapes: height = " << height << " weight = " << totalMass << std::endl;
+
+    double d = getBodyDensity(height, totalMass);
+    for (int i = 0; i < skeleton.getNumJoints(); i++)
+    {
+        AJoint* j = skeleton.getByID(i);
+        Anthropometrics::BodyData data = mapping.at(j->getName()); // TODO: Mapping is empty now!
+        _jmass[j->getName()] = getMass(data.first, totalMass) * data.second;
+        _jdensity[j->getName()] = getDensity(data.first, d); // might not be right -> what about scale?
+        _comOffset[j->getName()] = getCOMProximal(data.first); // might not be right -> what about scale
+    }
+    
+    //computeMass(skeleton);
+    //computeInertia(skeleton);
+}
+/*
+
+mat3 InvDynBVH::computeBoxInertia(double hw, double hl, double hd, double density, int direction)
+{
+    double mass = computeBoxMass(hw,hl,hd,density);
+    double Il = (1.0/12.0)*mass*(4*hw*hw + 4*hd*hd);
+    double Iw = (1.0/12.0)*mass*(4*hl*hl + 4*hd*hd);
+    double Id = (1.0/12.0)*mass*(4*hw*hw + 4*hl*hl);
+    mat3 I = identity3D;
+    I[0][0] = Iw;
+    I[1][1] = Il;
+    I[2][2] = Id;
+    return I;
+}   
+    
+void InvDynBVH::ComputeMass(Skeleton& skeleton)
+{
+   for (int i = 0; i < skeleton.GetNumJoints(); i++)
+   {
+        Joint* j = skeleton.GetJointByID(i);
+        double density = jdensity[j->GetName()] * 1000;
+        float length = j->GetLocalTranslation().Length();
+        //double tmp = density * length * 4; // cuboid
+        //double tmp = density * (3.0/4.0) * (1.0/2.0) * M_PI * length; // ellipsoid
+        double tmp = density * M_PI * length; // cylinder
+        if (tmp > 0.0 && jmass[j->GetName()] > 0)
+        {
+            aspx[j->GetName()] = sqrt(jmass[j->GetName()]/tmp); 
+        }
+        else
+        {
+            aspx[j->GetName()] = 0.0;
+        }
+        //std::cout << j->GetName() << " " << jmass[j->GetName()] << " " << length << " " << aspx[j->GetName()] << std::endl;
+   }
+
+   double m_fTotalMass = 0;
+   for (int i = 0; i < skeleton.GetNumJoints(); i++)
+   {
+        Joint* j = skeleton.GetJointByID(i);
+      m_fTotalMass += jmass[j->GetName()];
+    }
+    //std::cout << "totalMass = " << m_fTotalMass << std::endl;
+    totalMass = m_fTotalMass;
+
+    ComputeCombinedMass(skeleton, skeleton.GetRootJoint());
+}
+double InvDynBVH::computeCapsuleMass(double r, double l, double density)
+{
+    double mcylinder = M_PI*r*r*l*density;
+    double massphere = (4.0/3.0)*M_PI*r*r*r*density;
+    return massphere + mcylinder;
+}
+
+// From http://www.gamedev.net/topic/350429-capsule-moment-of-inertia/
+// direction: 0=X, 1=Y, 2=Z
+mat3 InvDynBVH::computeCapsuleInertia(double r, double l, double density, int direction)
+{
+    assert(direction >= 0 && direction <= 2);
+
+    mat3 m = identity3D;
+    double M1 = M_PI*r*r*l*density;       // cylinder mass
+    double M2 = (4.0/3.0)*M_PI*r*r*r*density;   // total cap mass
+
+    double Ia = M1*(0.25*r*r + (1.0/12.0)*l*l) + M2*(0.4*r*r + 0.375*r*l + 0.25*l*l);
+    double Ib = (M1*0.5 + M2*0.4)*r*r;
+    m[0][0] = Ia;
+    m[1][1] = Ia;
+    m[2][2] = Ia;
+    m[direction][direction] = Ib;
+    //std::cout << Ia << " " << Ib << std::endl;
+
+    return m;
+}
+
+double InvDynBVH::computeBoxMass(double hw, double hl, double hd, double density)
+{
+    double volume = 8*hw*hl*hd;
+    return volume * density;
+}
+
+
+double InvDynBVH::ComputeCombinedMass(const Skeleton& skeleton, Joint* joint)
+{
+    double mass = jmass[joint->GetName()];
+    for (int i = 0; i < joint->GetNumChildren(); i++)
+    {
+        Joint* child = joint->GetChildAt(i);
+        mass += ComputeCombinedMass(skeleton, child);
+    }
+    jmassCombo[joint->GetName()] = mass;
+    return mass;
+}
+void InvDynBVH::ComputeInertia(Skeleton& skeleton)
+{
+    // inertia: align bone direction with the y (UP) direction
+    // create rot matrix by mapping x,y,z joint axes to right,up,direction
+    // need to set aspx based on mass distribution
+    for (int i = 0; i < skeleton.GetNumJoints(); i++)
+   {
+      Joint* pBone = skeleton.GetJointByID(i);
+        float r = aspx[pBone->GetName()];
+        float x = aspx[pBone->GetName()];
+        float y = pBone->m_translation.Length();
+        float z = aspx[pBone->GetName()];
+        float mass = jmass[pBone->GetName()];
+        float com = comOffset[pBone->GetName()];
+      //printf("mass = %f\n", mass);
+
+      // Use inertia of a cuboid
+      //jIlocal[pBone->GetName()] = mat3(
+      // vec3(mass/12.0*(y*y+4*z*z),0,0), 
+      // vec3(0,mass/12.0*(4*x*x+4*z*z),0), 
+      // vec3(0,0,mass/12.0*(4*x*x+y*y)));
+
+      // Use inertia of a ellipse
+      //jIlocal[pBone->GetName()] = mat3(
+      // vec3(mass/5.0*(y*y+z*z),0,0), 
+      // vec3(0,mass/5.0*(x*x+z*z),0), 
+      // vec3(0,0,mass/5.0*(x*x+y*y)));
+
+      // Use inertia of a cylinder
+        jIlocal[pBone->GetName()] = mat3(
+            vec3(mass/12.0*(3*r*r+y*y),0,0),
+            vec3(0,mass/2.0*(r*r), 0),  // assume y is major direction
+            vec3(0,0,mass/12.0*(3*r*r+y*y)));
+
+        // See: http://hyperphysics.phy-astr.gsu.edu/hbase/parax.html#pax
+        mat3 parallelAxisContribution(
+            vec3(0,0,0),
+            vec3(0, -mass*(com-0.5)*(com-0.5)*y*y,0),
+            vec3(0,0,0));
+        jIlocal[pBone->GetName()] += parallelAxisContribution;
+
+        // See: http://hyperphysics.phy-astr.gsu.edu/hbase/parax.html#pax
+        mat3 parallelAxisContribution(
+            vec3(0,0,0),
+            vec3(0, -mass*(com-0.5)*(com-0.5)*y*y,0),
+            vec3(0,0,0));
+        jIlocal[pBone->GetName()] += parallelAxisContribution;
+
+        //std::cout << pBone->GetName() << " xx = " << jIlocal[pBone->GetName()][0][0] <<
+        //    " yy = " << jIlocal[pBone->GetName()][1][1] <<
+        //    " zz = " << jIlocal[pBone->GetName()][2][2] << std::endl;
+
+        // Use inertia of sphere
+        //double a = (2.0/5.0)*mass * y*y;
+      //jIlocal[pBone->GetName()] = mat3(
+         //vec3(a,0,0), 
+         //vec3(0,a,0), 
+         //vec3(0,0,a));
+        //jI[pBone->GetName()] = jIlocal[pBone->GetName()];
+        //std::cout << jIlocal[pBone->GetName()] << std::endl;
+
+
+        vec3 up = pBone->GetLocalTranslation();
+        up = up.Normalize();
+        vec3 forward(0,0,1);
+        vec3 right(1,0,0);
+        right = up.Cross(forward);
+        forward = right.Cross(up);
+
+        mat3 i2j(right, up, forward);
+        //std::cout << i2j << std::endl;
+
+        //vec3 test1 = i2j * up; // test1 should be (0,1,0)
+        //vec3 test2 = i2j * vec3(0,1,0); // test2 = up
+        //vec3 test3 = i2j.Transpose() * vec3(0,1,0);
+
+        // align cuboid with joint
+        jI[pBone->GetName()] = i2j.Transpose() * jIlocal[pBone->GetName()] * i2j;
+   }
+}
+*/
 
 // cast insensitive search for joint containing any name from names
 AJoint* findJoint(const ASkeleton& skeleton, const std::vector<std::string> names)
@@ -346,6 +576,114 @@ double Anthropometrics::getDensity(Anthropometrics::Segment s, double bodyDensit
 
     return 1.0; 
 }
+
+/*
+
+void InvDynBVH::SetBoneShapesCMU(Skeleton& skeleton)
+{
+   // ASN: Set desired masses directly, figure out ratios later in ComputeMass
+    jmass["root"]=0.0;
+    jmass["lhipjoint"]=0.0;
+    jmass["lfemur"]= 4.38888;
+    jmass["ltibia"]=6.0444;
+    jmass["lfoot"]=1.9964;
+    jmass["ltoes"]=0.252598;
+    jmass["ltoesSite"]=0.0187188;
+
+    jmass["rhipjoint"]=0.0;     // doesn't exist in BVH
+    jmass["rfemur"]=4.53631;
+    jmass["rtibia"]=6.15115;
+    jmass["rfoot"]=2.08259;
+    jmass["rtoes"]=0.268396 ;
+    jmass["rtoesSite"]=0.0202983;
+
+    jmass["lowerback"]=0; // no length for lowerback
+    jmass["upperback"]=4.65925;
+    jmass["thorax"]=9.95197;
+    jmass["lowerneck"]=0.664636;
+    jmass["upperneck"]=0.664636;
+    jmass["head"]=0.659668;
+    jmass["headSite"]=4.19339;
+
+    jmass["lclavicle"]=0.287175;
+    jmass["lhumerus"]=1.77743;
+    jmass["lradius"]=0.599668;
+    jmass["lwrist"]=0.220286;
+    jmass["lhand"]=0.0149651;
+    jmass["lthumb"]=0.000173234;
+    jmass["lthumbSite"]=0.0;
+    jmass["lfingers"]=0.000120653;
+    jmass["lfingersSite"]=0.0;
+
+    jmass["rclavicle"]=0.299184;
+    jmass["rhumerus"]=1.55477;
+    jmass["rradius"]=0.69524;
+    jmass["rwrist"]=0.255395;
+    jmass["rhand"]=0.0170309;
+    jmass["rthumb"]=0.000197147;
+    jmass["rthumbSite"]=0.0;
+    jmass["rfingers"]=0.000137308;
+    jmass["rfingersSite"]= 0.0;
+    std::map<std::string,double>::iterator it;
+    for (it = jmass.begin(); it != jmass.end(); it++)
+    {
+        comOffset[it->first] = 0.5;
+    }
+
+    ComputeMass(skeleton);
+    ComputeInertia(skeleton);
+}
+
+void InvDynBVH::SetBoneShapesMB(Skeleton& skeleton)
+{
+    jmass["Hips"]=0.0; 
+    jmass["LeftUpLeg"]=4.39;
+    jmass["LeftLeg"]=6.04;
+    jmass["LeftFoot"]=2.00;  
+    jmass["LeftToeBase"]=0.25; 
+    jmass["LeftToeBaseSite"]=0.02;
+
+    jmass["RightUpLeg"]=4.54;
+    jmass["RightLeg"]=6.15; 
+    jmass["RightFoot"]=2.08; 
+    jmass["RightToeBase"]=0.27; 
+    jmass["RightToeBaseSite"]=0.02;
+
+    jmass["Spine"]=3.0; 
+    jmass["Spine2"]=3.8175;
+    jmass["Spine3"]=3.8175;
+    jmass["Spine4"]=3.8175;
+    jmass["Neck"]=1.46; 
+    jmass["Neck1"]=0.46;
+    jmass["Head"]=0.46; 
+    jmass["HeadSite"]=4.19;
+
+    jmass["LeftShoulder"]=0.29;
+    jmass["LeftArm"]=1.78;
+    jmass["LeftForeArm"]=0.60;
+    jmass["LeftHand"]=0.22; 
+    jmass["LeftHandSite"]=0.01;
+
+    jmass["RightShoulder"]=0.30;
+    jmass["RightArm"]=1.55; 
+    jmass["RightForeArm"]=0.70;
+    jmass["RightHand"]=0.26; 
+    jmass["RightHandSite"]=0.02;
+
+    std::map<std::string,double>::iterator it;
+    for (it = jmass.begin(); it != jmass.end(); it++)
+    {
+        comOffset[it->first] = 0.5;
+        jdensity[it->first] = 1.0;
+    }
+
+    ComputeMass(skeleton);
+    ComputeInertia(skeleton);
+}
+
+                                                                  
+
+*/
 
 /*
 #define DFLTLIM Limits(-90*Deg2Rad, 90*Deg2Rad)

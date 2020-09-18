@@ -16,25 +16,28 @@ public:
     Anthropometrics();
     virtual ~Anthropometrics();
 
+    // mappings from joints to metrics
+    enum Segment {Hand, Forearm, UpperArm, Foot, Shank, Thigh, HeadNeck, Trunk};
+    typedef std::pair<Segment, double> BodyData;
+    typedef std::map<std::string, BodyData> BodyMap;
+    static BodyMap CMU_Mapping;
+    static BodyMap MB_Mapping;
+    static BodyMap ASL_Mapping;
+
     // scale factor: conversion factor needed for converting the meters
-    void init(const ASkeleton& skeleton, double factor = 1.0);
+    void init(const ASkeleton& skeleton, const BodyMap& map, double factor = 1.0);
 
     // Average weight and density
     double getWeight(double height);
     double getBodyDensity(double height, double weight);
 
     // Segment properties
-    enum Segment {Hand, Forearm, UpperArm, Foot, Shank, Thigh, HeadNeck, Trunk};
     double getMass(Segment s, double totalMass);
     double getCOMProximal(Segment s);
     double getCOMDistal(Segment s);
     double getDensity(Segment s, double bodyDensity);
     glm::vec3 getDimensions(const ASkeleton& skeleton) const;        
     double estimateHeight(const ASkeleton& skeleton, int upidx) const;
-
-    typedef std::pair<Segment, double> BodyData;
-    std::map<std::string, BodyData> CMU_Mapping;
-    std::map<std::string, BodyData> MB_Mapping;
 
     // bounding spheres for self-collision testing
     typedef std::pair<glm::vec3, double> BSphere;
@@ -51,6 +54,8 @@ public:
     };
     // Depending on the number of DOFs, a joint could be a ball, swing, or hinge joint
     std::map<std::string, std::vector<DOF>> jointDOFs; 
+
+   void setupBoneShapes(const ASkeleton& skeleton, const BodyMap& map, double h, double totalMass);
 
     //bool isBall(Joint* joint);
     //bool isSwing(Joint* joint);
@@ -94,6 +99,20 @@ protected:
     std::map<Segment, double> _mass;
     std::map<Segment, double> _comProximal;
     std::map<Segment, double> _rogProximal;
+
+    // body shape parameters
+    double _height;
+    double _totalMass;
+    std::map<std::string,double> _aspx; // radius of bone
+    std::map<std::string,double> _jmass; // masses
+    std::map<std::string,double> _jmassCombo; // masses as sum of children
+    std::map<std::string,double> _jdensity; // masses as sum of children
+    // COM offset from start of each bone, e.g. comPos = comOffset * joint->LocalTranslation()
+    std::map<std::string,double> _comOffset; 
+
+    std::map<std::string,glm::mat3> _jI; // momments of inertia
+    std::map<std::string,glm::mat3> _jIlocal; // momments of inertia
+
 };
 
 #endif
