@@ -31,14 +31,12 @@ AMotion bvhMotion;
 ASkeleton bvhSkeleton;
 Anthropometrics anthropometrics;
 
-void createBox(const BodyNodePtr& bn, AJoint* joint)
+void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, float radius)
 {
   // Create a BoxShape to be used for both visualization and collision checking
   // Dimension shoudl be driven by joint size
-  glm::vec3 offset = joint->getLocalTranslation()/100.0f; // cm to m
   float length = glm::length(offset);
-  float radius = anthropometrics.getRadius(joint->getName());
-  //std::cout << joint->getName() << " " << length << " " << radius << std::endl;
+  std::cout << joint->getName() << " " << length << " " << radius << std::endl;
 
   std::shared_ptr<BoxShape> box(new BoxShape(
       Eigen::Vector3d(radius, radius, length)));
@@ -92,16 +90,15 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint, double radius)
   for (int i = 0; i < joint->getNumChildren(); i++)
   {
     AJoint* child = joint->getChildAt(i);
-    coms += 0.5f * child->getLocalTranslation();
+    glm::vec3 offset = child->getLocalTranslation()/100.0f; // cm to m
+    float radius = anthropometrics.getRadius(child->getName());
+
+    coms += 0.5f * offset;
     mass += anthropometrics.getMass(child->getName());
-    createBox(bn, child);
+    if (mass > 0) createBox(bn, child, offset, radius);
   }
   coms = coms / (float) joint->getNumChildren();
 
-  if (mass < 0.000001) // zero happens for feet/hands
-  {
-    mass = anthropometrics.getMass(joint->getName()); 
-  }
   // Move the center of mass to the average com of the children
   // coms are at the center of each box joint
   bn->setLocalCOM(Eigen::Vector3d(coms[0], coms[1], coms[2]));

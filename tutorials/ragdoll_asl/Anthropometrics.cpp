@@ -169,14 +169,18 @@ Anthropometrics::Anthropometrics()
     ASL_Mapping["LeftUpLeg"] = BodyData(Trunk, 0.2);
     ASL_Mapping["LeftLeg"] = BodyData(Thigh, 1.0);
     ASL_Mapping["LeftFoot"] = BodyData(Shank, 1.0);
-    ASL_Mapping["LeftFootHeel"] = BodyData(Foot, 0.50);
-    ASL_Mapping["LeftHeelOutside"] = BodyData(Foot, 0.50);
+    ASL_Mapping["LeftFootHeel"] = BodyData(Foot, 0.1);
+    ASL_Mapping["LeftHeelOutside"] = BodyData(Foot, 0.1);
+    ASL_Mapping["LeftFootHeelSite"] = BodyData(Foot, 0.4);
+    ASL_Mapping["LeftHeelOutsideSite"] = BodyData(Foot, 0.4);
 
     ASL_Mapping["RightUpLeg"] = BodyData(Trunk, 0.2);
     ASL_Mapping["RightLeg"] = BodyData(Thigh, 1.0);
     ASL_Mapping["RightFoot"] = BodyData(Shank, 1.0);
-    ASL_Mapping["RightFootHeel"] = BodyData(Foot, 0.50);
-    ASL_Mapping["RightHeelOutside"] = BodyData(Foot, 0.50);
+    ASL_Mapping["RightFootHeel"] = BodyData(Foot, 0.1);
+    ASL_Mapping["RightHeelOutside"] = BodyData(Foot, 0.1);
+    ASL_Mapping["RightFootHeelSite"] = BodyData(Foot, 0.4);
+    ASL_Mapping["RightHeelOutsideSite"] = BodyData(Foot, 0.4);
 
     ASL_Mapping["Spine"] = BodyData(Trunk, 0.2);
     ASL_Mapping["Spine1"] = BodyData(Trunk, 0.2);
@@ -188,13 +192,13 @@ Anthropometrics::Anthropometrics()
     ASL_Mapping["LeftArm"] = BodyData(Trunk, 0.05);
     ASL_Mapping["LeftForeArm"] = BodyData(UpperArm, 1.0);
     ASL_Mapping["LeftHand"] = BodyData(Forearm, 1.0);
-    ASL_Mapping["LeftPalm"] = BodyData(Hand, 1.0);
+    ASL_Mapping["LeftmiddleA"] = BodyData(Hand, 1.0);
 
     ASL_Mapping["RightShoulder"] = BodyData(Trunk, 0.05);
     ASL_Mapping["RightArm"] = BodyData(Trunk, 0.05);
     ASL_Mapping["RightForeArm"] = BodyData(UpperArm, 1.0);
     ASL_Mapping["RightHand"] = BodyData(Forearm, 1.0);
-    ASL_Mapping["RightPalm"] = BodyData(Hand, 1.0);
+    ASL_Mapping["RightmiddleA"] = BodyData(Hand, 1.0);
 
     // TODO: Move to unit test
     // Test mapping: all body parts should sum to 1
@@ -218,7 +222,6 @@ Anthropometrics::Anthropometrics()
     {
       std::cout << it->first << " " << it->second << std::endl;
     }
-    
 }
 
 Anthropometrics::~Anthropometrics()
