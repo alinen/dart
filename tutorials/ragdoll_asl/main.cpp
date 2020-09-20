@@ -7,25 +7,16 @@
 #include "AnimationToolkit.h"
 #include "Anthropometrics.h"
 
-const double default_speed_increment = 0.5;
-
-const int default_ik_iterations = 4500;
-
 const double default_force = 50.0; // N
 const double default_torque = 15.0; // N-m
 const int default_countdown = 100; // Number of timesteps for applying force
-
-const double default_pelvis_radius = 0.05; // m
-const double default_radius = 0.01;  // m
-
-const double default_rest_position = 0.0;
-const double delta_rest_position = 10.0 * M_PI / 180.0;
 
 const double default_stiffness = 0.0;
 const double delta_stiffness = 10;
 
 const double default_damping = 5.0;
 const double delta_damping = 1.0;
+const double default_radius = 0.01; // joint display purposes only
 
 using namespace dart::common;
 using namespace dart::dynamics;
@@ -46,7 +37,7 @@ void createBox(const BodyNodePtr& bn, AJoint* joint)
   // Dimension shoudl be driven by joint size
   glm::vec3 offset = joint->getLocalTranslation()/100.0f; // cm to m
   float length = glm::length(offset);
-  float radius = length * 0.25f;
+  float radius = anthropometrics.getRadius(joint->getName());
   //std::cout << joint->getName() << " " << length << " " << radius << std::endl;
 
   std::shared_ptr<BoxShape> box(new BoxShape(
@@ -125,7 +116,7 @@ BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
   BodyNodePtr bn = pendulum->createJointAndBodyNodePair<FreeJoint>(
         nullptr, properties, BodyNode::AspectProperties(name)).second;
 
-  setGeometry(bn, joint, default_pelvis_radius);
+  setGeometry(bn, joint, 0.01);
   return bn;
 }
 
@@ -154,6 +145,9 @@ BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
 
 bool isHandJoint(AJoint* joint)
 {
+  //if (joint->getName().find("Palm") != std::string::npos) return false; // keep root
+  //joint = joint->getParent();
+
   while (joint)
   {
     if (joint->getName().find("Palm") != std::string::npos)
@@ -172,7 +166,7 @@ SkeletonPtr loadBiped()
   reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
     bvhSkeleton, bvhMotion);
 
-  anthropometrics.init(bvhSkeleton, Anthropometrics::ASL_Mapping, 0.01); // 0.01 converts from CM to M
+  anthropometrics.init(bvhSkeleton, 0.01); // 0.01 converts from CM to M
   bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
 
   // sitting position

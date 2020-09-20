@@ -8,9 +8,34 @@
 
 using namespace glm;
 
-Anthropometrics::BodyMap Anthropometrics::CMU_Mapping;
-Anthropometrics::BodyMap Anthropometrics::MB_Mapping;
-Anthropometrics::BodyMap Anthropometrics::ASL_Mapping;
+enum MoUnit {MM,CM,M,INCH,FT};  // Motion units
+enum Weight {KG,LB}; // Weight units
+
+std::map<MoUnit, std::map<MoUnit,float>> initConversions()
+{
+    std::map<MoUnit, std::map<MoUnit,float>> m;
+    m[MM][MM] = 1.0;    m[MM][CM] = 0.1;    m[MM][M] = 0.001;    m[MM][INCH] = 0.0393701;m[MM][FT] = 0.00328084;
+    m[CM][MM] = 10.0;   m[CM][CM] = 1.0;    m[CM][M] = 0.01;     m[CM][INCH] = 0.393701; m[CM][FT] = 0.0328084;
+    m[M][MM] = 1000.0;  m[M][CM] = 100.0;   m[M][M] = 1.0;       m[M][INCH] = 39.3701;   m[M][FT] = 3.28084;
+    m[INCH][MM] = 25.4; m[INCH][CM] = 2.54; m[INCH][M] = 0.0254; m[INCH][INCH] = 1.0;    m[INCH][FT] = 0.0833333;
+    m[FT][MM] = 304.8;  m[FT][CM] = 30.48;  m[FT][M] = 0.3048;   m[FT][INCH] = 12.0;     m[FT][FT] = 1.0;
+    return m;
+}
+
+std::map<Weight, std::map<Weight,float>> initWeightConversions()
+{
+    std::map<Weight, std::map<Weight,float>> m;
+    m[LB][KG] = 0.453592;
+    m[KG][LB] = 2.20462;
+    return m;
+}
+
+std::map<MoUnit, std::map<MoUnit,float>> MoUnitTable = initConversions();
+std::map<Weight, std::map<Weight,float>> WeightTable = initWeightConversions();
+
+//Anthropometrics::BodyMap Anthropometrics::CMU_Mapping = Anthropometrics::BodyMap();
+//Anthropometrics::BodyMap Anthropometrics::MB_Mapping = Anthropometrics::BodyMap();
+//Anthropometrics::BodyMap Anthropometrics::ASL_Mapping = Anthropometrics::BodyMap();
 
 // initialize constants: alternate models can be tried by overriding these values
 Anthropometrics::Anthropometrics()
@@ -63,36 +88,6 @@ Anthropometrics::Anthropometrics()
     _HeadNeckDensityM = 0;
     _TrunkDensityB = 1.03; // constant
     _TrunkDensityM = 0.0; 
-
-    /* TODO: Move to unit test
-    double wgt = 190 * WeightTable[LB][KG];
-    double height = 73 * MoUnitTable[INCH][M];
-    double d = GetBodyDensity(height, wgt);
-    double mass = wgt; // wgt = mass * gravity
-    double volume = mass / d;
-    double test1 =  GetDensity(Hand, d); 
-    double test2 =  GetDensity(Forearm, d); 
-    double test3 =  GetDensity(UpperArm, d); 
-    double test4 =  GetDensity(Foot, d); 
-    double test5 =  GetDensity(Shank, d); 
-    double test6 =  GetDensity(Thigh, d); 
-    double test7 =  GetDensity(HeadNeck, d); 
-    double test8 =  GetDensity(Trunk, d); 
-
-    std::vector<double> volumes(8,0);
-    volumes[0] =  2*(GetMass(Hand, mass) / test1); // note: density * vol = mass
-    volumes[1] =  2*(GetMass(Forearm, mass) / test2); // note: density * vol = mass
-    volumes[2] =  2*(GetMass(UpperArm, mass) / test3); // note: density * vol = mass
-    volumes[3] =  2*(GetMass(Foot, mass) / test4); // note: density * vol = mass
-    volumes[4] =  2*(GetMass(Shank, mass) / test5); // note: density * vol = mass
-    volumes[5] =  2*(GetMass(Thigh, mass) / test6); // note: density * vol = mass
-    volumes[6] =  GetMass(HeadNeck, mass) / test7; // note: density * vol = mass
-    volumes[7] =  GetMass(Trunk, mass) / test8; // note: density * vol = mass
-
-    double sum = 0;
-    for (int i = 0; i < volumes.size(); i++) sum += volumes[i];
-    std::cout << sum << " " << volume << std::endl;
-    */
 
     MB_Mapping["Hips"] = BodyData(Trunk, 0.0);
     MB_Mapping["LeftUpLeg"] = BodyData(Trunk, 0.15);
@@ -171,19 +166,19 @@ Anthropometrics::Anthropometrics()
 
     // TODO: ASL mapping fix this so it works with physics!
     ASL_Mapping["Hips"] = BodyData(Trunk, 0.0);
-    ASL_Mapping["LeftUpLeg"] = BodyData(Trunk, 0.15);
+    ASL_Mapping["LeftUpLeg"] = BodyData(Trunk, 0.2);
     ASL_Mapping["LeftLeg"] = BodyData(Thigh, 1.0);
     ASL_Mapping["LeftFoot"] = BodyData(Shank, 1.0);
     ASL_Mapping["LeftFootHeel"] = BodyData(Foot, 0.50);
     ASL_Mapping["LeftHeelOutside"] = BodyData(Foot, 0.50);
 
-    ASL_Mapping["RightUpLeg"] = BodyData(Trunk, 0.15);
+    ASL_Mapping["RightUpLeg"] = BodyData(Trunk, 0.2);
     ASL_Mapping["RightLeg"] = BodyData(Thigh, 1.0);
     ASL_Mapping["RightFoot"] = BodyData(Shank, 1.0);
     ASL_Mapping["RightFootHeel"] = BodyData(Foot, 0.50);
     ASL_Mapping["RightHeelOutside"] = BodyData(Foot, 0.50);
 
-    ASL_Mapping["Spine"] = BodyData(Trunk, 0.1);
+    ASL_Mapping["Spine"] = BodyData(Trunk, 0.2);
     ASL_Mapping["Spine1"] = BodyData(Trunk, 0.2);
     ASL_Mapping["Neck"] = BodyData(HeadNeck, 0.1);
     ASL_Mapping["Head"] = BodyData(HeadNeck, 0.1);
@@ -200,16 +195,38 @@ Anthropometrics::Anthropometrics()
     ASL_Mapping["RightForeArm"] = BodyData(UpperArm, 1.0);
     ASL_Mapping["RightHand"] = BodyData(Forearm, 1.0);
     ASL_Mapping["RightPalm"] = BodyData(Hand, 1.0);
+
+    // TODO: Move to unit test
+    // Test mapping: all body parts should sum to 1
+    std::map<Segment, float> sum = 
+    { 
+      {Hand,0.0}, 
+      {Forearm,0.0}, 
+      {UpperArm,0.0}, 
+      {Foot,0.0}, 
+      {Shank,0.0}, 
+      {Thigh,0.0}, 
+      {HeadNeck,0.0}, 
+      {Trunk,0.0}
+    };
+    for (auto it = ASL_Mapping.begin(); it != ASL_Mapping.end(); it++)
+    {
+      BodyData data = it->second;
+      sum[data.first] += data.second;
+    }
+    for (auto it = sum.begin(); it != sum.end(); it++)
+    {
+      std::cout << it->first << " " << it->second << std::endl;
+    }
+    
 }
 
 Anthropometrics::~Anthropometrics()
 {
 }
 
-void Anthropometrics::init(const ASkeleton& inSkeleton, const BodyMap& map, double factor) 
+void ScaleSkeleton(ASkeleton& skeleton, double factor)
 {
-    ASkeleton skeleton = inSkeleton;
-
     // Zero out joints
     skeleton.getRoot()->setLocalTranslation(vec3(0,0,0));
     for (int i = 0; i < skeleton.getNumJoints(); i++)
@@ -219,6 +236,12 @@ void Anthropometrics::init(const ASkeleton& inSkeleton, const BodyMap& map, doub
         joint->setLocalTranslation(joint->getLocalTranslation() * (float) factor);
     }
     skeleton.fk(); 
+}
+
+void Anthropometrics::init(const ASkeleton& inSkeleton, double factor) 
+{
+    ASkeleton skeleton = inSkeleton;
+    ScaleSkeleton(skeleton, factor);
 
     // Find up direction
     int upidx = 2; 
@@ -227,9 +250,128 @@ void Anthropometrics::init(const ASkeleton& inSkeleton, const BodyMap& map, doub
 
     double height = estimateHeight(skeleton, upidx);
     double mass = getWeight(height);
-    setupBoneShapes(skeleton, map, height, mass);
+    std::cout << "height: " << height << " weight: " << mass << std::endl; 
+    setupBoneShapes(skeleton, height, mass);
+
+    // TODO: Move to unit test
+/*
+    double d = getBodyDensity(height, mass);
+    double volume = mass / d;
+    double test1 =  getDensity(Hand, d); 
+    double test2 =  getDensity(Forearm, d); 
+    double test3 =  getDensity(UpperArm, d); 
+    double test4 =  getDensity(Foot, d); 
+    double test5 =  getDensity(Shank, d); 
+    double test6 =  getDensity(Thigh, d); 
+    double test7 =  getDensity(HeadNeck, d); 
+    double test8 =  getDensity(Trunk, d); 
+
+    std::vector<double> volumes(8,0);
+    volumes[0] =  2*(getMass(Hand, mass) / test1); // note: density * vol = mass
+    volumes[1] =  2*(getMass(Forearm, mass) / test2); // note: density * vol = mass
+    volumes[2] =  2*(getMass(UpperArm, mass) / test3); // note: density * vol = mass
+    volumes[3] =  2*(getMass(Foot, mass) / test4); // note: density * vol = mass
+    volumes[4] =  2*(getMass(Shank, mass) / test5); // note: density * vol = mass
+    volumes[5] =  2*(getMass(Thigh, mass) / test6); // note: density * vol = mass
+    volumes[6] =  getMass(HeadNeck, mass) / test7; // note: density * vol = mass
+    volumes[7] =  getMass(Trunk, mass) / test8; // note: density * vol = mass
+
+    double sum = 0;
+    for (int i = 0; i < (int) volumes.size(); i++) sum += volumes[i];
+    std::cout << sum << " " << volume << std::endl;
+*/
 }
 
+void Anthropometrics::init(const ASkeleton& inSkeleton, 
+   double height, double weight, double factor)
+{
+    ASkeleton skeleton = inSkeleton;
+    ScaleSkeleton(skeleton, factor);
+
+    // Find up direction
+    int upidx = 2; 
+    vec3 dim = getDimensions(skeleton);
+    if (dim[1] > dim[2]) upidx = 1;
+
+    setupBoneShapes(skeleton, height, weight);
+}
+
+void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton, double height, double totalMass)
+{
+    AJoint* root = skeleton.getRoot();
+
+    double d = getBodyDensity(height, totalMass);
+    for (int i = 0; i < skeleton.getNumJoints(); i++)
+    {
+        AJoint* j = skeleton.getByID(i);
+        BodyData data = ASL_Mapping[j->getName()];
+        _jmass[j->getName()] = getMass(data.first, totalMass) * data.second;
+        _jdensity[j->getName()] = getDensity(data.first, d); 
+        _comOffset[j->getName()] = getCOMProximal(data.first); 
+    }
+
+    std::map<std::string,double>::iterator it;
+    for (it = _jmass.begin(); it != _jmass.end(); it++)
+    {
+        _comOffset[it->first] = 0.5;
+        _jdensity[it->first] = 1.0;
+    }
+
+   computeMass(skeleton);
+}
+
+void Anthropometrics::computeMass(const ASkeleton& skeleton)
+{
+   for (int i = 0; i < skeleton.getNumJoints(); i++)
+   {
+       AJoint* j = skeleton.getByID(i);
+       double density = _jdensity[j->getName()] * 1000;
+       float length = glm::length(j->getLocalTranslation());
+       double tmp = density * length * 4; // cuboid
+       //double tmp = density * (3.0/4.0) * (1.0/2.0) * M_PI * length; // ellipsoid
+       //double tmp = density * M_PI * length; // cylinder
+       if (tmp > 0.0 && _jmass[j->getName()] > 0)
+       {
+           _aspx[j->getName()] = sqrt(_jmass[j->getName()]/tmp); 
+       }
+       else
+       {
+           _aspx[j->getName()] = 0.0;
+       }
+       //std::cout << j->getName() << " " << _jmass[j->getName()] << " " << length << " " << _aspx[j->getName()] << std::endl;
+   }
+
+   double fTotalMass = 0;
+   for (int i = 0; i < skeleton.getNumJoints(); i++)
+   {
+        AJoint* j = skeleton.getByID(i);
+        fTotalMass += _jmass[j->getName()];
+    }
+    std::cout << "totalMass = " << fTotalMass << std::endl;
+    _totalMass = fTotalMass;
+}
+
+double Anthropometrics::getRadius(const std::string& name)
+{
+   return _aspx[name];
+}
+
+double Anthropometrics::getMass(const std::string& name)
+{
+   return _jmass[name];
+}
+
+double Anthropometrics::getDensity(const std::string& name)
+{
+   return _jdensity[name];
+}
+
+double Anthropometrics::getCOMProximal(const std::string& name)
+{
+   return _comOffset[name];
+}
+
+/*
 void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton, 
    const BodyMap& mapping, double height, double totalMass)
 {
@@ -243,7 +385,7 @@ void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton,
     for (int i = 0; i < skeleton.getNumJoints(); i++)
     {
         AJoint* j = skeleton.getByID(i);
-        Anthropometrics::BodyData data = mapping.at(j->getName()); // TODO: Mapping is empty now!
+        Anthropometrics::BodyData::iterator data = mapping.find(j->getName()); 
         _jmass[j->getName()] = getMass(data.first, totalMass) * data.second;
         _jdensity[j->getName()] = getDensity(data.first, d); // might not be right -> what about scale?
         _comOffset[j->getName()] = getCOMProximal(data.first); // might not be right -> what about scale
@@ -252,6 +394,7 @@ void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton,
     //computeMass(skeleton);
     //computeInertia(skeleton);
 }
+*/
 /*
 
 mat3 InvDynBVH::computeBoxInertia(double hw, double hl, double hd, double density, int direction)
@@ -267,38 +410,6 @@ mat3 InvDynBVH::computeBoxInertia(double hw, double hl, double hd, double densit
     return I;
 }   
     
-void InvDynBVH::ComputeMass(Skeleton& skeleton)
-{
-   for (int i = 0; i < skeleton.GetNumJoints(); i++)
-   {
-        Joint* j = skeleton.GetJointByID(i);
-        double density = jdensity[j->GetName()] * 1000;
-        float length = j->GetLocalTranslation().Length();
-        //double tmp = density * length * 4; // cuboid
-        //double tmp = density * (3.0/4.0) * (1.0/2.0) * M_PI * length; // ellipsoid
-        double tmp = density * M_PI * length; // cylinder
-        if (tmp > 0.0 && jmass[j->GetName()] > 0)
-        {
-            aspx[j->GetName()] = sqrt(jmass[j->GetName()]/tmp); 
-        }
-        else
-        {
-            aspx[j->GetName()] = 0.0;
-        }
-        //std::cout << j->GetName() << " " << jmass[j->GetName()] << " " << length << " " << aspx[j->GetName()] << std::endl;
-   }
-
-   double m_fTotalMass = 0;
-   for (int i = 0; i < skeleton.GetNumJoints(); i++)
-   {
-        Joint* j = skeleton.GetJointByID(i);
-      m_fTotalMass += jmass[j->GetName()];
-    }
-    //std::cout << "totalMass = " << m_fTotalMass << std::endl;
-    totalMass = m_fTotalMass;
-
-    ComputeCombinedMass(skeleton, skeleton.GetRootJoint());
-}
 double InvDynBVH::computeCapsuleMass(double r, double l, double density)
 {
     double mcylinder = M_PI*r*r*l*density;

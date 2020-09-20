@@ -20,12 +20,13 @@ public:
     enum Segment {Hand, Forearm, UpperArm, Foot, Shank, Thigh, HeadNeck, Trunk};
     typedef std::pair<Segment, double> BodyData;
     typedef std::map<std::string, BodyData> BodyMap;
-    static BodyMap CMU_Mapping;
-    static BodyMap MB_Mapping;
-    static BodyMap ASL_Mapping;
+    BodyMap CMU_Mapping;
+    BodyMap MB_Mapping;
+    BodyMap ASL_Mapping;
 
     // scale factor: conversion factor needed for converting the meters
-    void init(const ASkeleton& skeleton, const BodyMap& map, double factor = 1.0);
+    void init(const ASkeleton& skeleton, double factor = 1.0);
+    void init(const ASkeleton& skeleton, double height, double weight, double factor = 1.0);
 
     // Average weight and density
     double getWeight(double height);
@@ -36,6 +37,14 @@ public:
     double getCOMProximal(Segment s);
     double getCOMDistal(Segment s);
     double getDensity(Segment s, double bodyDensity);
+
+    // joint properties
+    double getRadius(const std::string& name);
+    double getMass(const std::string& name);
+    double getDensity(const std::string& name);
+    double getCOMProximal(const std::string& name);
+
+    // skeleton properties
     glm::vec3 getDimensions(const ASkeleton& skeleton) const;        
     double estimateHeight(const ASkeleton& skeleton, int upidx) const;
 
@@ -55,7 +64,9 @@ public:
     // Depending on the number of DOFs, a joint could be a ball, swing, or hinge joint
     std::map<std::string, std::vector<DOF>> jointDOFs; 
 
-   void setupBoneShapes(const ASkeleton& skeleton, const BodyMap& map, double h, double totalMass);
+   void setupBoneShapes(const ASkeleton& skeleton, double h, double totalMass);
+   //void setupBoneShapes(const ASkeleton& skeleton, const BodyMap& map, double h, double totalMass);
+   void computeMass(const ASkeleton& skeleton);
 
     //bool isBall(Joint* joint);
     //bool isSwing(Joint* joint);
