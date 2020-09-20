@@ -88,17 +88,24 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint, double radius)
 
   // Set the geometry/com of the Body
   glm::vec3 coms(0,0,0);
+  float mass = 0.0; 
   for (int i = 0; i < joint->getNumChildren(); i++)
   {
     AJoint* child = joint->getChildAt(i);
     coms += 0.5f * child->getLocalTranslation();
+    mass += anthropometrics.getMass(child->getName());
     createBox(bn, child);
   }
   coms = coms / (float) joint->getNumChildren();
-  
+
+  if (mass < 0.000001) // zero happens for feet/hands
+  {
+    mass = anthropometrics.getMass(joint->getName()); 
+  }
   // Move the center of mass to the average com of the children
   // coms are at the center of each box joint
   bn->setLocalCOM(Eigen::Vector3d(coms[0], coms[1], coms[2]));
+  bn->setMass(mass);
 }
 
 BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
@@ -143,10 +150,10 @@ BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
   return bn;
 }
 
-bool isHandJoint(AJoint* joint)
+bool isFingerJoint(AJoint* joint)
 {
-  //if (joint->getName().find("Palm") != std::string::npos) return false; // keep root
-  //joint = joint->getParent();
+  if (joint->getName().find("Palm") != std::string::npos) return false; // keep palm
+  joint = joint->getParent();
 
   while (joint)
   {
@@ -178,7 +185,7 @@ SkeletonPtr loadBiped()
   for (int i = 0; i < bvhSkeleton.getNumJoints(); i++) // left leg
   {
     AJoint* joint = bvhSkeleton.getByID(i);
-    if (isHandJoint(joint)) continue;
+    if (isFingerJoint(joint)) continue;
     if (joint->getNumChildren() == 0) continue;
     AJoint* parent = joint->getParent();
     BodyNode* bn = parent? 
@@ -189,6 +196,8 @@ SkeletonPtr loadBiped()
 
   biped->enableSelfCollisionCheck();
   biped->disableAdjacentBodyCheck();
+
+  std::cout << "BIPED MASS: " << biped->getMass() << std::endl;
 
   return biped;
 }

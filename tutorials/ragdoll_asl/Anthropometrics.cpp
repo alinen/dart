@@ -306,6 +306,7 @@ void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton, double height, 
         AJoint* j = skeleton.getByID(i);
         BodyData data = ASL_Mapping[j->getName()];
         _jmass[j->getName()] = getMass(data.first, totalMass) * data.second;
+        //std::cout << j->getName() << " " << data.first << " " << getMass(data.first, totalMass) << " " << data.second << " " << _jmass[j->getName()] << std::endl;
         _jdensity[j->getName()] = getDensity(data.first, d); 
         _comOffset[j->getName()] = getCOMProximal(data.first); 
     }
