@@ -4,6 +4,7 @@
 #include <dart/utils/utils.hpp>
 #include <map>
 #include <cassert>
+#include <iostream>
 #include "AnimationToolkit.h"
 #include "../ragdoll_asl/Anthropometrics.h"
 
@@ -85,14 +86,26 @@ public:
     // Step the simulation forward
     SimWindow::timeStepping();
 
+    skeleton->computeForwardKinematics();
     skeleton->computeInverseDynamics();
     for (size_t i = 1; i < skeleton->getNumJoints(); i++)
     {
       Joint* joint = skeleton->getJoint(i);
-      if (joint->getName() == "LeftArm")
+      if (joint->getName() == "LeftForeArm")
       {
          Eigen::MatrixXd forces = joint->getForces();
-         std::cout << "ID FORCE: " << forces.transpose() << std::endl;
+         Eigen::VectorXd accels = joint->getAccelerations();
+         Eigen::VectorXd vels = joint->getVelocities();
+         Eigen::Vector6d sVels = joint->getRelativeSpatialVelocity();
+         Eigen::Vector6d sAccs = joint->getRelativeSpatialAcceleration();
+         double potentialEnergy = joint->computePotentialEnergy();
+         
+         std::cout << "LeftArm FORCE: " << forces.transpose() << std::endl;
+         std::cout << "LeftArm ACCEL: " << accels.transpose() << std::endl;
+         std::cout << "LeftArm VELS : " << vels.transpose() << std::endl;
+         std::cout << "LeftArm Potential Energy: " << potentialEnergy << std::endl;
+         std::cout << "LeftArm Spatial VELS: " << sVels.transpose() << std::endl;
+         std::cout << "LeftArm Spatial ACCS: " << sAccs.transpose() << std::endl;
       }
 
     }
