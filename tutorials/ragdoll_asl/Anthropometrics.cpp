@@ -182,10 +182,10 @@ Anthropometrics::Anthropometrics()
     ASL_Mapping["RightFootHeelSite"] = BodyData(Foot, 0.4);
     ASL_Mapping["RightHeelOutsideSite"] = BodyData(Foot, 0.4);
 
-    ASL_Mapping["Spine"] = BodyData(Trunk, 0.2);
-    ASL_Mapping["Spine1"] = BodyData(Trunk, 0.2);
-    ASL_Mapping["Neck"] = BodyData(HeadNeck, 0.1);
-    ASL_Mapping["Head"] = BodyData(HeadNeck, 0.1);
+    ASL_Mapping["Spine"] = BodyData(Trunk, 0.15);
+    ASL_Mapping["Spine1"] = BodyData(Trunk, 0.15);
+    ASL_Mapping["Neck"] = BodyData(Trunk, 0.1);
+    ASL_Mapping["Head"] = BodyData(HeadNeck, 0.2);
     ASL_Mapping["HeadSite"] = BodyData(HeadNeck, 0.8);
 
     ASL_Mapping["LeftShoulder"] = BodyData(Trunk, 0.05);

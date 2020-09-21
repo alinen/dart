@@ -5,6 +5,7 @@
 #include <map>
 #include <cassert>
 #include "AnimationToolkit.h"
+#include "../ragdoll_asl/Anthropometrics.h"
 
 const double default_speed_increment = 0.5;
 
@@ -20,7 +21,7 @@ const double default_radius = 0.01;  // m
 const double default_rest_position = 0.0;
 const double delta_rest_position = 10.0 * M_PI / 180.0;
 
-const double default_stiffness = 0.0;
+const double default_stiffness = 100.0;
 const double delta_stiffness = 10;
 
 const double default_damping = 5.0;
@@ -37,6 +38,7 @@ using namespace dart::math;
 // Globals for now...
 AMotion bvhMotion;
 ASkeleton bvhSkeleton;
+Anthropometrics anthropometrics;
 
 bool isUpperBody(AJoint* joint)
 {
@@ -292,13 +294,11 @@ protected:
   bool mPositiveSign;
 };
 
-void createBox(const BodyNodePtr& bn, AJoint* joint)
+void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, float radius)
 {
   // Create a BoxShape to be used for both visualization and collision checking
   // Dimension shoudl be driven by joint size
-  glm::vec3 offset = joint->getLocalTranslation()/100.0f; // cm to m
   float length = glm::length(offset);
-  float radius = length * 0.25f;
   //std::cout << joint->getName() << " " << length << " " << radius << std::endl;
 
   std::shared_ptr<BoxShape> box(new BoxShape(
@@ -349,17 +349,23 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint, double radius)
 
   // Set the geometry/com of the Body
   glm::vec3 coms(0,0,0);
+  float mass = 0.0; 
   for (int i = 0; i < joint->getNumChildren(); i++)
   {
     AJoint* child = joint->getChildAt(i);
-    coms += 0.5f * child->getLocalTranslation();
-    createBox(bn, child);
+    glm::vec3 offset = child->getLocalTranslation()/100.0f; // cm to m
+    float radius = anthropometrics.getRadius(child->getName());
+
+    coms += 0.5f * offset;
+    mass += anthropometrics.getMass(child->getName());
+    if (mass > 0) createBox(bn, child, offset, radius);
   }
   coms = coms / (float) joint->getNumChildren();
   
   // Move the center of mass to the average com of the children
   // coms are at the center of each box joint
   bn->setLocalCOM(Eigen::Vector3d(coms[0], coms[1], coms[2]));
+  bn->setMass(mass);
 }
 
 BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
@@ -431,6 +437,9 @@ SkeletonPtr loadBiped()
   ABVHReader reader;
   reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
     bvhSkeleton, bvhMotion);
+
+  anthropometrics.init(bvhSkeleton, 0.01); // 0.01 converts from CM to M
+  bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
 
   SkeletonPtr biped = Skeleton::create("biped");
   std::map<AJoint*, BodyNode*> bodies;
