@@ -36,7 +36,7 @@ void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, fl
   // Create a BoxShape to be used for both visualization and collision checking
   // Dimension shoudl be driven by joint size
   float length = glm::length(offset);
-  std::cout << joint->getName() << " " << length << " " << radius << std::endl;
+  std::cout << "createBox: " << joint->getName() << " " << length << " " << radius << std::endl;
 
   std::shared_ptr<BoxShape> box(new BoxShape(
       Eigen::Vector3d(radius, radius, length)));
@@ -51,9 +51,9 @@ void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, fl
   Eigen::Vector3d offsetDir = Eigen::Vector3d(offset[0], offset[1], offset[2]).normalized(); 
   Eigen::Vector3d x,y,z;
   x = Eigen::Vector3d::UnitY().cross(offsetDir).normalized(); 
-  if (x.norm() < 0.1) // y and offsetDir are aligned
+  if (x.norm() < 0.00001) // y and offsetDir are aligned
   {
-    y = offsetDir.cross(x);
+    y = offsetDir.cross(Eigen::Vector3d::UnitX());
     y.normalize();
     x = y.cross(offsetDir);
     x.normalize();
@@ -68,7 +68,7 @@ void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, fl
   R.col(0) = x;
   R.col(1) = y;
   R.col(2) = offsetDir;
-  //std::cout << x << " " << y << " " << offsetDir << std::endl;
+  std::cout << x.transpose() << " " << y.transpose() << " " << offsetDir.transpose() << std::endl;
   Eigen::Vector3d center = 0.5 * Eigen::Vector3d(offset[0], offset[1], offset[2]);
 
   Eigen::Isometry3d box_tf(Eigen::Isometry3d::Identity());
@@ -90,7 +90,7 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint, double radius)
   for (int i = 0; i < joint->getNumChildren(); i++)
   {
     AJoint* child = joint->getChildAt(i);
-    glm::vec3 offset = child->getLocalTranslation()/100.0f; // cm to m
+    glm::vec3 offset = child->getLocalTranslation()/100.0f; 
     float radius = anthropometrics.getRadius(child->getName());
 
     coms += 0.5f * offset;
@@ -167,10 +167,11 @@ bool isFingerJoint(AJoint* joint)
 SkeletonPtr loadBiped()
 {
   ABVHReader reader;
-  reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
+  //reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
+  reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage-2020/p01/p01_INTRODUCTION.bvh",
     bvhSkeleton, bvhMotion);
 
-  anthropometrics.init(bvhSkeleton, 0.01); // 0.01 converts from CM to M
+  anthropometrics.init(bvhSkeleton, 1.7526, 70.67, 0.01); // 0.01 -> convert cm to m 
   bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
 
   // sitting position

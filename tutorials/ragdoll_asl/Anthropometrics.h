@@ -23,6 +23,7 @@ public:
     BodyMap CMU_Mapping;
     BodyMap MB_Mapping;
     BodyMap ASL_Mapping;
+    BodyMap KIN_Mapping;
 
     // scale factor: conversion factor needed for converting the meters
     void init(const ASkeleton& skeleton, double factor = 1.0);
@@ -113,7 +114,8 @@ protected:
 
     // body shape parameters
     double _height;
-    double _totalMass;
+    double _skeletonMass; // mass of the skeleton (skeleton might only be part of the full body)
+    double _bodyMass; // input weight of the subject
     std::map<std::string,double> _aspx; // radius of bone
     std::map<std::string,double> _jmass; // masses
     std::map<std::string,double> _jmassCombo; // masses as sum of children

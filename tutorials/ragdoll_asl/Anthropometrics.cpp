@@ -200,28 +200,48 @@ Anthropometrics::Anthropometrics()
     ASL_Mapping["RightHand"] = BodyData(Forearm, 1.0);
     ASL_Mapping["RightmiddleA"] = BodyData(Hand, 1.0);
 
+    KIN_Mapping["spineBase"] = BodyData(Trunk,0.0);
+    KIN_Mapping["spineMid"] = BodyData(Trunk,0.55);
+    KIN_Mapping["spineShoulder"] = BodyData(Trunk,0.25);
+    KIN_Mapping["neck"] = BodyData(Trunk,0.1);
+    KIN_Mapping["head"] = BodyData(HeadNeck, 1.0);
+
+    KIN_Mapping["shoulderLeft"] = BodyData(Trunk,0.05);
+    KIN_Mapping["elbowLeft"] = BodyData(UpperArm, 1.0);
+    KIN_Mapping["wristLeft"] = BodyData(Forearm, 1.0);
+    KIN_Mapping["palmLeft"] = BodyData(Hand, 0.8);
+    KIN_Mapping["indexLeft"] = BodyData(Hand,0.1);
+    KIN_Mapping["thumbLeft"] = BodyData(Hand,0.1);
+
+    KIN_Mapping["shoulderRight"] = BodyData(Trunk,0.05);
+    KIN_Mapping["elbowRight"] = BodyData(UpperArm, 1.0);
+    KIN_Mapping["wristRight"] = BodyData(Forearm, 1.0);
+    KIN_Mapping["palmRight"] = BodyData(Hand,0.8);
+    KIN_Mapping["indexRight"] = BodyData(Hand,0.1);
+    KIN_Mapping["thumbRight"] = BodyData(Hand,0.1);
+
     // TODO: Move to unit test
-    // Test mapping: all body parts should sum to 1
-    std::map<Segment, float> sum = 
-    { 
-      {Hand,0.0}, 
-      {Forearm,0.0}, 
-      {UpperArm,0.0}, 
-      {Foot,0.0}, 
-      {Shank,0.0}, 
-      {Thigh,0.0}, 
-      {HeadNeck,0.0}, 
-      {Trunk,0.0}
-    };
-    for (auto it = ASL_Mapping.begin(); it != ASL_Mapping.end(); it++)
-    {
-      BodyData data = it->second;
-      sum[data.first] += data.second;
-    }
-    for (auto it = sum.begin(); it != sum.end(); it++)
-    {
-      std::cout << it->first << " " << it->second << std::endl;
-    }
+    // Test mapping: all body parts should sum to 1 (KIN_Mapping is upper body only)
+    //std::map<Segment, float> sum = 
+    //{ 
+    //  {Hand,0.0},    // note: will sum to 2 because 2 hands
+    //  {Forearm,0.0}, 
+    //  {UpperArm,0.0}, 
+    //  {Foot,0.0}, 
+    //  {Shank,0.0}, 
+    //  {Thigh,0.0}, 
+    //  {HeadNeck,0.0}, 
+    //  {Trunk,0.0}
+    //};
+    //for (auto it = KIN_Mapping.begin(); it != KIN_Mapping.end(); it++)
+    //{
+    //  BodyData data = it->second;
+    //  sum[data.first] += data.second;
+    //}
+    //for (auto it = sum.begin(); it != sum.end(); it++)
+    //{
+    //  std::cout << it->first << " " << it->second << std::endl;
+    //}
 }
 
 Anthropometrics::~Anthropometrics()
@@ -301,15 +321,17 @@ void Anthropometrics::init(const ASkeleton& inSkeleton,
 
 void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton, double height, double totalMass)
 {
+    _bodyMass = totalMass;
     AJoint* root = skeleton.getRoot();
 
     double d = getBodyDensity(height, totalMass);
     for (int i = 0; i < skeleton.getNumJoints(); i++)
     {
         AJoint* j = skeleton.getByID(i);
-        BodyData data = ASL_Mapping[j->getName()];
+        //BodyData data = ASL_Mapping[j->getName()];
+        BodyData data = KIN_Mapping[j->getName()];
         _jmass[j->getName()] = getMass(data.first, totalMass) * data.second;
-        //std::cout << j->getName() << " " << data.first << " " << getMass(data.first, totalMass) << " " << data.second << " " << _jmass[j->getName()] << std::endl;
+        std::cout << j->getName() << " " << data.first << " " << getMass(data.first, totalMass) << " " << data.second << " " << _jmass[j->getName()] << std::endl;
         _jdensity[j->getName()] = getDensity(data.first, d); 
         _comOffset[j->getName()] = getCOMProximal(data.first); 
     }
@@ -352,7 +374,7 @@ void Anthropometrics::computeMass(const ASkeleton& skeleton)
         fTotalMass += _jmass[j->getName()];
     }
     std::cout << "totalMass = " << fTotalMass << std::endl;
-    _totalMass = fTotalMass;
+    _skeletonMass = fTotalMass;
 }
 
 double Anthropometrics::getRadius(const std::string& name)
@@ -382,7 +404,7 @@ void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton,
     AJoint* root = skeleton.getRoot();
 
     _height = height;
-    _totalMass = totalMass;
+    _skeletonMass = totalMass;
     std::cout << "SetupBoneShapes: height = " << height << " weight = " << totalMass << std::endl;
 
     double d = getBodyDensity(height, totalMass);

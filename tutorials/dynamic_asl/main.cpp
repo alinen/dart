@@ -314,9 +314,9 @@ void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, fl
   Eigen::Vector3d offsetDir = Eigen::Vector3d(offset[0], offset[1], offset[2]).normalized(); 
   Eigen::Vector3d x,y,z;
   x = Eigen::Vector3d::UnitY().cross(offsetDir).normalized(); 
-  if (x.norm() < 0.1) // y and offsetDir are aligned
+  if (x.norm() < 0.00001) // y and offsetDir are aligned
   {
-    y = offsetDir.cross(x);
+    y = offsetDir.cross(Eigen::Vector3d::UnitX());
     y.normalize();
     x = y.cross(offsetDir);
     x.normalize();
@@ -435,10 +435,10 @@ bool isHandJoint(AJoint* joint)
 SkeletonPtr loadBiped()
 {
   ABVHReader reader;
-  reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage/SIB01-story01-bvh.bvh",
+  reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage-2020/p01/p01_INTRODUCTION.bvh",
     bvhSkeleton, bvhMotion);
 
-  anthropometrics.init(bvhSkeleton, 0.01); // 0.01 converts from CM to M
+  anthropometrics.init(bvhSkeleton, 1.7526, 70.67, 0.01);
   bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
 
   SkeletonPtr biped = Skeleton::create("biped");
