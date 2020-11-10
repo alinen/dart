@@ -5,8 +5,11 @@
 #include <map>
 #include <cassert>
 #include <iostream>
+#include <fstream>
 #include "AnimationToolkit.h"
 #include "../ragdoll_asl/Anthropometrics.h"
+
+std::ofstream ofile("p01_INTRODUCTION_dart.txt");
 
 const int default_ik_iterations = 4500;
 
@@ -46,6 +49,23 @@ public:
   MyWindow(const WorldPtr& world)
   {
     setWorld(world);
+
+    // TODO: What are the generalized coordinates and their order?
+    SkeletonPtr skeleton = mWorld->getSkeleton("biped");
+    ofile << "RootX\tRootY\tRootZ\tRootRotX\tRootRotY\tRootRotZ";
+    for (size_t i = 1; i < skeleton->getNumJoints(); i++)
+    {
+      Joint* joint = skeleton->getJoint(i);
+      ofile << "\t" << joint->getName() << "X" <<
+               "\t" << joint->getName() << "Y" <<
+               "\t" << joint->getName() << "Z"; 
+    }
+    ofile << std::endl;
+  }
+
+  virtual ~MyWindow() 
+  {
+     ofile.close();
   }
 
   /// Handle keyboard input
@@ -57,6 +77,9 @@ public:
         break;
       case '.':
         break;
+      case 'r':
+        mTime = 0;
+        break;
       default:
         SimWindow::keyboard(key, x, y);
     }
@@ -64,7 +87,8 @@ public:
 
   void timeStepping() override
   {
-    bvhMotion.update(bvhSkeleton, mWorld->getTime());
+    mTime += mWorld->getTimeStep();
+    bvhMotion.update(bvhSkeleton, mTime);
 
     SkeletonPtr skeleton = mWorld->getSkeleton("biped");
     for (size_t i = 1; i < skeleton->getNumJoints(); i++)
@@ -83,34 +107,35 @@ public:
       joint->setPosition(2, euler[2]);
 
     }
+    skeleton->computeInverseDynamics(true);
+    Eigen::VectorXd forces = skeleton->getForces();
+    ofile << forces.transpose() << std::endl;
+
     // Step the simulation forward
     SimWindow::timeStepping();
-
-    skeleton->computeForwardKinematics();
-    skeleton->computeInverseDynamics();
-    for (size_t i = 1; i < skeleton->getNumJoints(); i++)
+/*
+    for (size_t i = 0; i < skeleton->getNumJoints(); i++)
     {
       Joint* joint = skeleton->getJoint(i);
-      if (joint->getName() == "LeftForeArm")
-      {
-         Eigen::MatrixXd forces = joint->getForces();
-         Eigen::VectorXd accels = joint->getAccelerations();
-         Eigen::VectorXd vels = joint->getVelocities();
-         Eigen::Vector6d sVels = joint->getRelativeSpatialVelocity();
-         Eigen::Vector6d sAccs = joint->getRelativeSpatialAcceleration();
-         double potentialEnergy = joint->computePotentialEnergy();
-         
-         std::cout << "LeftArm FORCE: " << forces.transpose() << std::endl;
-         std::cout << "LeftArm ACCEL: " << accels.transpose() << std::endl;
-         std::cout << "LeftArm VELS : " << vels.transpose() << std::endl;
-         std::cout << "LeftArm Potential Energy: " << potentialEnergy << std::endl;
-         std::cout << "LeftArm Spatial VELS: " << sVels.transpose() << std::endl;
-         std::cout << "LeftArm Spatial ACCS: " << sAccs.transpose() << std::endl;
-      }
+      Eigen::MatrixXd forces = joint->getForces();
+      Eigen::VectorXd accels = joint->getAccelerations();
+      Eigen::VectorXd vels = joint->getVelocities();
+      Eigen::Vector6d sVels = joint->getRelativeSpatialVelocity();
+      Eigen::Vector6d sAccs = joint->getRelativeSpatialAcceleration();
+      double potentialEnergy = joint->computePotentialEnergy();
 
+      ofile << joint->getName() << "," <<
+         forces.transpose() << "," <<
+         accels.transpose() << "," <<
+         vels.transpose()   << "," <<
+         potentialEnergy    << "," <<
+         sVels.transpose()  << "," <<
+         sAccs.transpose() << std::endl; 
     }
-      
+*/
   }
+
+  float mTime = 0;
 };
 
 void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, float radius)
@@ -118,7 +143,7 @@ void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, fl
   // Create a BoxShape to be used for both visualization and collision checking
   // Dimension shoudl be driven by joint size
   float length = glm::length(offset);
-  //std::cout << joint->getName() << " " << length << " " << radius << std::endl;
+  std::cout << joint->getName() << " " << length << " " << radius << std::endl;
 
   std::shared_ptr<BoxShape> box(new BoxShape(
       Eigen::Vector3d(radius, radius, length)));
@@ -183,8 +208,11 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint, double radius)
   
   // Move the center of mass to the average com of the children
   // coms are at the center of each box joint
-  bn->setLocalCOM(Eigen::Vector3d(coms[0], coms[1], coms[2]));
-  bn->setMass(mass);
+  if (mass > 0) 
+  {
+     bn->setLocalCOM(Eigen::Vector3d(coms[0], coms[1], coms[2]));
+     bn->setMass(mass);
+  }
 }
 
 BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
