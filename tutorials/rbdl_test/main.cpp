@@ -7,10 +7,6 @@
 #include <iostream>
 #include <fstream>
 #include "AnimationToolkit.h"
-#include "../ragdoll_asl/Anthropometrics.h"
-
-std::ofstream ofile("p01_INTRODUCTION_dart_forces.txt");
-std::ofstream comfile("p01_INTRODUCTION_dart_com.txt");
 
 const int default_ik_iterations = 4500;
 
@@ -38,11 +34,6 @@ using namespace dart::gui::glut;
 using namespace dart::utils;
 using namespace dart::math;
 
-// Globals for now...
-AMotion bvhMotion;
-ASkeleton bvhSkeleton;
-Anthropometrics anthropometrics;
-
 class MyWindow : public SimWindow
 {
 public:
@@ -51,22 +42,10 @@ public:
   {
     setWorld(world);
 
-    // TODO: What are the generalized coordinates and their order?
-    SkeletonPtr skeleton = mWorld->getSkeleton("biped");
-    ofile << "RootX\tRootY\tRootZ\tRootRotX\tRootRotY\tRootRotZ";
-    for (size_t i = 1; i < skeleton->getNumJoints(); i++)
-    {
-      Joint* joint = skeleton->getJoint(i);
-      ofile << "\t" << joint->getName() << "X" <<
-               "\t" << joint->getName() << "Y" <<
-               "\t" << joint->getName() << "Z"; 
-    }
-    ofile << std::endl;
   }
 
   virtual ~MyWindow() 
   {
-     ofile.close();
   }
 
   /// Handle keyboard input
@@ -88,66 +67,46 @@ public:
 
   void timeStepping() override
   {
-    mTime += mWorld->getTimeStep();
-    //bvhMotion.update(bvhSkeleton, mTime);
-
+    // print current state
     SkeletonPtr skeleton = mWorld->getSkeleton("biped");
-    for (size_t i = 1; i < skeleton->getNumJoints(); i++)
-    {
-      Joint* joint = skeleton->getJoint(i);
 
-      AJoint* bvhJoint = bvhSkeleton.getByName(joint->getName());
-      assert(bvhJoint != 0);
-
-      glm::quat rotation = bvhJoint->getLocalRotation();
-      glm::vec3 euler = glm::extractEulerAngleRO(glm::XYZ, glm::mat3(rotation));
-
-      // Set joint "position" as XYZ euler angles (local coordinates?)
-      joint->setPosition(0, euler[0]);
-      joint->setPosition(1, euler[1]);
-      joint->setPosition(2, euler[2]);
-
-    }
     skeleton->computeInverseDynamics(true);
     Eigen::VectorXd forces = skeleton->getForces();
-    ofile << forces.transpose() << std::endl;
+    std::cout << forces.transpose() << std::endl;
+
+    Joint* joint = skeleton->getJoint("child"); 
+    BodyNode* body = skeleton->getBodyNode("child"); 
+    Eigen::Matrix6d inertia = body->getArticulatedInertia();
+     //Eigen::Matrix6d inertia = body->getSpatialInertia();
+     std::cout << body->getName() << " SpatialInertia:\n" << inertia << std::endl;
+
+     Eigen::Vector6d velocity = joint->getRelativeSpatialVelocity();
+     std::cout << joint->getName() << " SpatialVelocity:\n" << velocity.transpose() << std::endl;
+
+     Eigen::Vector6d acceleration = joint->getRelativeSpatialAcceleration();
+     std::cout << joint->getName() << " SpatialAcceleration:\n" << acceleration.transpose() << std::endl;
 
     // Step the simulation forward
-    SimWindow::timeStepping();
-/*
-    for (size_t i = 0; i < skeleton->getNumJoints(); i++)
-    {
-      Joint* joint = skeleton->getJoint(i);
-      Eigen::MatrixXd forces = joint->getForces();
-      Eigen::VectorXd accels = joint->getAccelerations();
-      Eigen::VectorXd vels = joint->getVelocities();
-      Eigen::Vector6d sVels = joint->getRelativeSpatialVelocity();
-      Eigen::Vector6d sAccs = joint->getRelativeSpatialAcceleration();
-      double potentialEnergy = joint->computePotentialEnergy();
+    mTime += mWorld->getTimeStep();
 
-      ofile << joint->getName() << "," <<
-         forces.transpose() << "," <<
-         accels.transpose() << "," <<
-         vels.transpose()   << "," <<
-         potentialEnergy    << "," <<
-         sVels.transpose()  << "," <<
-         sAccs.transpose() << std::endl; 
-    }
-*/
+    //joint->setPosition(0, sin(mTime));
+    joint->setPosition(2, 1);
+
+    SimWindow::timeStepping();
+
   }
 
   float mTime = 0;
 };
 
-void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, float radius)
+void createBox(const BodyNodePtr& bn, const std::string& name, 
+   float mass, const glm::vec3& offset, float radius)
 {
   // Create a BoxShape to be used for both visualization and collision checking
-  // Dimension shoudl be driven by joint size
   float length = glm::length(offset);
-  std::cout << joint->getName() << " " << length << " " << radius << std::endl;
 
   std::shared_ptr<BoxShape> box(new BoxShape(
-      Eigen::Vector3d(radius, radius, length)));
+      Eigen::Vector3d(radius*2, radius*2, length)));
 
   // Create a shape node for visualization and collision checking
   auto shapeNode
@@ -178,20 +137,17 @@ void createBox(const BodyNodePtr& bn, AJoint* joint, const glm::vec3& offset, fl
   R.col(2) = offsetDir;
   //std::cout << x << " " << y << " " << offsetDir << std::endl;
   Eigen::Vector3d center = 0.5 * Eigen::Vector3d(offset[0], offset[1], offset[2]);
+  //Eigen::Vector3d center(0,0,0);
 
   Eigen::Isometry3d box_tf(Eigen::Isometry3d::Identity());
   box_tf.fromPositionOrientationScale(center, R, Eigen::Vector3d::Ones());
   shapeNode->setRelativeTransform(box_tf);
 
-  Eigen::Matrix3d inertia = 
-     shapeNode->getShape()->computeInertia(
-        anthropometrics.getMass(joint->getName()));
-
-  comfile << joint->getName() << " " << 
-      " inertia: \n" << inertia << std::endl;
+  Eigen::Matrix3d inertia = shapeNode->getShape()->computeInertia(mass);
+  std::cout << name << " inertia: \n" << inertia << std::endl;
 }
 
-void setGeometry(const BodyNodePtr& bn, AJoint* joint, double ballR)
+void setGeometry(const BodyNodePtr& bn, const std::string& name, double ballR)
 {
   // Make a shape for the Joint
   std::shared_ptr<EllipsoidShape> ball(
@@ -199,54 +155,23 @@ void setGeometry(const BodyNodePtr& bn, AJoint* joint, double ballR)
   auto shapeNode = bn->createShapeNodeWith<VisualAspect>(ball);
   shapeNode->getVisualAspect()->setColor(dart::Color::Blue());
 
-  // Set the geometry/com of the Body
-  glm::vec3 coms(0,0,0);
-  float mass = 0.0; 
-  int num = 0;
-  for (int i = 0; i < joint->getNumChildren(); i++)
-  {
-    AJoint* child = joint->getChildAt(i);
-    glm::vec3 offset = child->getLocalTranslation()/100.0f; // cm to m
-    float radius = anthropometrics.getRadius(child->getName());
+  createBox(bn,name+"1",10.0,glm::vec3(0.707,0.707,0),0.25);
+  //createBox(bn,name+"2",10.0,glm::vec3(-0.707,0.707,0),0.25);
+  bn->setLocalCOM(Eigen::Vector3d(0.707 * 0.5, 0.707 * 0.5, 0.0));
+  //bn->setLocalCOM(Eigen::Vector3d(0.0, 0.5, 0.0));
+  bn->setMass(10.0);
+  Eigen::Matrix6d inertia = bn->getSpatialInertia();
+  std::cout << name << " SpatialInertia:\n" << inertia << std::endl;
 
-    float comOffset = anthropometrics.getCOMProximal(child->getName());
-    glm::vec3 comLocal = comOffset * offset;
-    float childMass = anthropometrics.getMass(child->getName());
-    if (childMass > 0) 
-    {
-       num++;
-       coms += comLocal; 
-       mass += childMass;
-       createBox(bn, child, offset, radius);
-       //comfile << "\t" << child->getName() << 
-         //" offset: " << comLocal[0] << "," << comLocal[1] << "," << comLocal[2] << 
-         //" box length: " << glm::length(offset) << 
-         //" box radius: " << radius << std::endl;
-    }
-  }
-  
-  // Move the center of mass to the average com of the children
-  if (mass > 0) 
-  {
-     coms = coms / (float) num;
-     bn->setLocalCOM(Eigen::Vector3d(coms[0], coms[1], coms[2]));
-     bn->setMass(mass);
+  Eigen::Vector6d velocity = bn->getSpatialVelocity();
+  std::cout << name << " SpatialVelocity:\n" << velocity.transpose() << std::endl;
 
-     comfile << joint->getName() << " " << 
-        " com: " << coms[0] << "," << coms[1] << "," << coms[2] << 
-        " mass: " << mass << std::endl;
-
-
-     Eigen::Matrix6d inertia = bn->getSpatialInertia();
-     comfile << joint->getName() << " spatial inertia\n" << inertia << std::endl;
-
-  }
+  Eigen::Vector6d acceleration = bn->getSpatialAcceleration();
+  std::cout << name << " SpatialAcceleration:\n" << acceleration.transpose() << std::endl;
 }
 
-BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
+BodyNode* makeRootBody(const SkeletonPtr& pendulum, const std::string& name)
 {
-  std::string name = joint->getName();
-
   FreeJoint::Properties properties;
   properties.mName = name;
   properties.mInitialPositions = Eigen::Vector6d::Zero();
@@ -255,69 +180,44 @@ BodyNode* makeRootBody(const SkeletonPtr& pendulum, AJoint* joint)
   BodyNodePtr bn = pendulum->createJointAndBodyNodePair<FreeJoint>(
         nullptr, properties, BodyNode::AspectProperties(name)).second;
 
-  setGeometry(bn, joint, default_pelvis_radius);
+  float ballR = default_pelvis_radius;
+  std::shared_ptr<EllipsoidShape> ball(
+        new EllipsoidShape(sqrt(2) * Eigen::Vector3d(ballR, ballR, ballR)));
+  auto shapeNode = bn->createShapeNodeWith<VisualAspect>(ball);
+  shapeNode->getVisualAspect()->setColor(dart::Color::Blue());
+
+  createBox(bn,name,10.0,glm::vec3(0.,1.,0),0.25);
+  bn->setLocalCOM(Eigen::Vector3d(0.0, 0.5, 0.0));
+  bn->setMass(10.0);
   return bn;
 }
 
-BodyNode* addBody(const SkeletonPtr& pendulum, BodyNode* parent, AJoint* joint)
+BodyNode* addBody(const SkeletonPtr& pendulum, const std::string& name, BodyNode* parent)
 {
-  glm::vec3 offset = joint->getLocalTranslation()/100.0f; // cm to m
+  glm::vec3 offset(0,1.0,0); 
 
   // Set up the properties for the Joint
   EulerJoint::Properties properties;
-  properties.mName = joint->getName();
+  properties.mName = name;
   properties.mAxisOrder = EulerJoint::AxisOrder::XYZ;
   properties.mT_ParentBodyToJoint.translation() =
       Eigen::Vector3d(offset[0], offset[1], offset[2]); // Joint offset
   properties.mActuatorType = Joint::VELOCITY;
 
   BodyNodePtr bn = pendulum->createJointAndBodyNodePair<EulerJoint>(
-        parent, properties, BodyNode::AspectProperties(joint->getName())).second;
+        parent, properties, BodyNode::AspectProperties(name)).second;
 
   // Make a shape for the Joint
-  setGeometry(bn, joint, default_radius);
+  setGeometry(bn, name, default_radius);
   return bn;
-}
-
-bool isHandJoint(AJoint* joint)
-{
-  while (joint)
-  {
-    if (joint->getName().find("Palm") != std::string::npos)
-    {
-      return true;
-    }
-    joint = joint->getParent();
-  }
-  return false;
 }
 
 // Load a biped model and enable joint limits and self-collision
 SkeletonPtr loadBiped()
 {
-  ABVHReader reader;
-  reader.load("/home/alinen/projects/AnimationToolkit/motions/SignLanguage-2020/p01/p01_INTRODUCTION.bvh",
-    bvhSkeleton, bvhMotion);
-
-  anthropometrics.init(bvhSkeleton, 1.7526, 70.67, 0.01); // 0.01 -> convert cm to m 
-  bvhMotion.update(bvhSkeleton, 0); // set pose at time 0
-
-  // sitting position
-  //bvhSkeleton.getByID(2)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
-  //bvhSkeleton.getByID(9)->setLocalTranslation(glm::vec3(0.00,0.00,35.00));
-
   SkeletonPtr biped = Skeleton::create("biped");
-  std::map<AJoint*, BodyNode*> bodies;
-  for (int i = 0; i < bvhSkeleton.getNumJoints(); i++) // left leg
-  {
-    AJoint* joint = bvhSkeleton.getByID(i);
-    if (isHandJoint(joint)) continue;
-    AJoint* parent = joint->getParent();
-    BodyNode* bn = parent? 
-      addBody(biped, bodies[parent], joint) : 
-      makeRootBody(biped, joint);
-    bodies[joint] = bn;
-  }
+  BodyNode* root = makeRootBody(biped, "root");
+  BodyNode* joint = addBody(biped, "child", root);
 
   biped->enableSelfCollisionCheck();
   biped->disableAdjacentBodyCheck();

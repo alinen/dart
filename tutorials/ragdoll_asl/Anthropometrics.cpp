@@ -336,13 +336,14 @@ void Anthropometrics::setupBoneShapes(const ASkeleton& skeleton, double height, 
         _comOffset[j->getName()] = getCOMProximal(data.first); 
     }
 
+/*
     std::map<std::string,double>::iterator it;
     for (it = _jmass.begin(); it != _jmass.end(); it++)
     {
         _comOffset[it->first] = 0.5;
         _jdensity[it->first] = 1.0;
     }
-
+*/
    computeMass(skeleton);
 }
 
